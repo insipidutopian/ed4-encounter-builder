@@ -162,29 +162,6 @@ class Ed4EncounterBuilder {
     this.adversaries.push(creature);
   }
 
-  static createTheCreateEncounterButton(html) {
-    if (!game.settings.get(Ed4EncounterBuilder.ID, Ed4EncounterBuilder.SETTINGS.INJECT_BUTTON)) {
-      return;
-    }
-    
-    Ed4EncounterBuilder.log(false, "Trying to add Create Encounter Button");
-    if (!!document.getElementById("create-button-encounter-builder")) return;
-
-    Ed4EncounterBuilder.log(false, "Adding Create Encounter Button");
-
-    // create localized tooltip
-    const tooltip = game.i18n.localize('ED4-ENCOUNTERBUILDER.button-title');
-
-    html.find('.header-actions').append(
-      `<button type='button' class='encounter-builder-icon-button flex0' title='${tooltip}'><i class='fas fa-spider'></i></button>`);
-
-    html.on('click', '.encounter-builder-icon-button', (event) => {
-      Ed4EncounterBuilder.log(true, 'Button Clicked!');
-      Ed4EncounterBuilder.encounterListForm.render(true, { userId: game.userId});
-    });
-
-    Ed4EncounterBuilder.log(false, "Added Create Encounter Button");
-  }
 
 
   static get getPcs() {
@@ -242,6 +219,15 @@ Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
   console.log("ed4-encounter-builder | registerPackageDebugFlag true");
 });
 
+Hooks.on("renderSceneControls", (controls, b, c) => {
+    if (game.user.isGM) {
+        $(".main-controls").append(`
+    <li class="scene-control " data-control="ed4-encounter-builder" data-tooltip="${game.i18n.localize("ED4-ENCOUNTERBUILDER.button-title")}">
+    <i class="fas fa-swords"></i>
+    </li>
+    `);
+    }
+});
 
 Hooks.once('init', async function() {
 	Ed4EncounterBuilder.log(false,  'ED4 Encounter Builder initializing!');
@@ -266,17 +252,11 @@ Hooks.once('init', async function() {
   Ed4EncounterBuilder.log(true,  'ED4 Encounter Builder initialized!');
 });
 
-// Hooks.once('init', () => {
-//   Ed4EncounterBuilder.initialize();
-// });
 
-Hooks.on("renderSidebarTab", async (app, html) => {
-    if (app.options.classes.includes("actors-sidebar")) {
-        Ed4EncounterBuilder.log(false, "In Hook: renderSidebarTab");
-        Ed4EncounterBuilder.createTheCreateEncounterButton(html)
-    }
-})
-
+$(document).on("click", `li[data-control="ed4-encounter-builder"]`, (e) => {
+  //render our encounter builder UI
+  Ed4EncounterBuilder.encounterListForm.render(true, { userId: game.userId});
+});
 
 /*
           EncounterData Class
@@ -775,8 +755,9 @@ class EncounterBuilderForm extends FormApplication {
         const found = Ed4EncounterBuilder.adversaries.find((a) => a.id === adversaryId);
         if (found) {
           Ed4EncounterBuilder.log(false, "Found adversary id: " + adversaryId + " in adversary list");
-          const compendiumName = found.compendium;     
-          const document = game.packs.get(compendiumName).get(adversaryId) ?? await this.collection.getDocument(adversaryId);
+          const compendiumName = found.compendium;
+          Ed4EncounterBuilder.log(false, `Checking ${found.compendium} for adversary id: ${adversaryId}`);
+          const document = game.packs.get(compendiumName).get(adversaryId) ?? await game.packs.get(compendiumName).getDocument(adversaryId);
           document.sheet.render(true);
         }
         break;

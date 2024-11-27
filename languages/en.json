@@ -1,17 +1,43 @@
 {
   "ED4-ENCOUNTERBUILDER": {
     "button-title": "Open Encounter Builder",
-    "create-encounter": "Create Encounter",
-    "delete-encounter": "Delete Encounter",
-    "build-encounter": "Build Encounter",
-    "mark-done": "Mark Encounter Completed",
-    "view-adversary": "View Adversary",
-    "encounter-description": "Description",
-    "encounter-details-section": "Details",
-    "encounter-name-label": "Encounter",
-    "encounter-challenge-section": "Encounter Challenge",
-    "encounter-adversaries-section": "Adversaries",
-    "done": "Done Editing",
+
+    "list-form": {
+      "mark-done-label": "Complete",
+      "mark-done": "Mark Encounter Completed",
+      "encounter-name-label": "Encounter Name",
+      "create-encounter": "Create Encounter",
+      "delete-encounter": "Delete Encounter",
+      "build-encounter": "Build Encounter"
+    },
+
+    "builder-form": {
+      "view-adversary-hint": "View Adversary",
+      "encounter-description-label": "Description",
+      "encounter-details-section": "Details",
+      "encounter-name-label": "Encounter",
+      "encounter-challenge-section": "Encounter Challenge",
+      "encounter-adversaries-section": "Adversaries",
+      "done-button-text": "Done Editing",
+      "encounter-difficulty": "Difficulty",
+      "pcs-label": "PCs",
+      "environment-label": "Environment",
+      "tactics-label": "Tactics",
+      "rewards-label": "Rewards",
+      "available-label": "available",
+      "enemies-label": "Enemies",
+      "add-more-label": "Add More",
+      "search-inputhint": "search by name",
+      "environment-inputhint": "list any traps or terrain features here",
+      "tactics-inputhint": "list any enemy tactics here",
+      "rewards-inputhint": "list any rewards here",
+      "description-inputhint": "Encounter Description..."
+    },
+
+    
+    
+    
+    
     "settings": {
       "inject-button": {
         "Name": "Display ED4 Encounter Builder?",
