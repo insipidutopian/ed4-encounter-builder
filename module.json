@@ -4,6 +4,7 @@
       "name": "Joel Waterman"
     }
   ],
+  "version": "#{VERSION}#",
   "description": "A simple module which provides encounter building support for the Earthdawn 4e system.",
   "languages": [
     {
@@ -23,6 +24,9 @@
   "styles": [
     "styles/ed4-encounter-builder.css"
   ],
+  "url": "#{URL}#",
+  "manifest": "#{MANIFEST}#",
+  "download": "#{DOWNLOAD}#",
   "title": "Insipidutopian's ED4 Encounter Builder",
   "version": "1.0.0"
 }
