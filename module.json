@@ -5,6 +5,7 @@
     }
   ],
   "version": "#{VERSION}#",
+  "title": "Insipidutopian's ED4 Encounter Builder",
   "description": "A simple module which provides encounter building support for the Earthdawn 4e system.",
   "languages": [
     {
@@ -27,6 +28,5 @@
   "url": "#{URL}#",
   "manifest": "#{MANIFEST}#",
   "download": "#{DOWNLOAD}#",
-  "title": "Insipidutopian's ED4 Encounter Builder",
-  "version": "1.0.0"
+  "manifestPlusVersion": "1.2.0"
 }
