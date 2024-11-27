@@ -1,0 +1,106 @@
+{{log 'ed4-encounter-builder' this}}
+{{log 'ed4-encounter-builder' this.encounter.description}}
+<form>
+  <h1>{{ localize "ED4-ENCOUNTERBUILDER.encounter-name-label" }}: {{encounter.label}}</h1>
+  <section>
+    <h2>{{ localize "ED4-ENCOUNTERBUILDER.encounter-challenge-section" }}</h2>
+    <section class="encounter-builder-challenge-section">
+      <section class="encounter-builder-challenge-subsection" style="border: 2px solid black">
+        <h3 class="ed4-encounter-builder">Difficulty: {{encounter.difficultyRating}}</h3>
+        <div id="difficulty-slider">
+          <img src="modules/ed4-encounter-builder/assets/difficulty-gauge-{{encounter.difficultyRating}}.png" alt="{{encounter.difficultyRating}} difficulty indicator" class="difficulty-gauge" width="250" height="133"/>
+        </div>
+      </section>
+      <section class="encounter-builder-pcs-subsection" style="border: 2px solid black">
+        <h3 class="ed4-encounter-builder">PCs: ({{allpcs.length}} available)</h3>
+        <ul class="nav-ul">
+        {{#each allpcs}}
+          <li class="flexrow ed4-encounter-builder ed4-encounter-builder-griditem" data-encounter-pc-id="{{id}}">
+            <input type="checkbox" name="{{id}}.isDone" title="{{localize "ED4-ENCOUNTERBUILDER.mark-done"}}" data-action="toggle-pc" data-dtype="Boolean" 
+              {{#if (pcIsInEncounter id ../encounter.id)}}checked{{/if}}/>
+            <img class="flex0 encounter-builder-adversary-img" src="{{img}}" alt="{{name}}" />        
+            <section class="flex">{{name}}</section>
+            <section class="flex">{{flags.ed4-encounter-builder.effectiveCircle}}</section> 
+        {{/each}}
+        </ul>
+      </section>
+    </section>
+  </section>
+  <section>
+    <h2>{{ localize "ED4-ENCOUNTERBUILDER.encounter-adversaries-section" }}</h2>
+    <section class="encounter-builder-adversaries-section" data-encounter-id="{{encounter.id}}">
+      <section class="encounter-builder-adversaries-subsection" style="border: 2px solid green">
+        <h3 class="ed4-encounter-builder">Enemies</h3>
+        <ul class="nav-ul">
+          {{#each encounter.enemies}}
+          <li class="flexrow ed4-encounter-builder ed4-encounter-builder-griditem" data-encounter-adversary-id="{{id}}">
+            <input class="flex0" type="text" value="{{count}}" name="{{id}}.count" data-dtype="Number" onchange="EncounterBuilderForm.updateEnemyCount()"/>
+            <img class="flex0 encounter-builder-adversary-img" src="{{img}}" alt="{{name}}" />
+            <section class="flex">{{name}}</section>
+            <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.view-adversary"}}" data-action="view-adversary" class="flex0 encounter-builder-icon-button">
+              <i class="fas fa-eye"></i>
+            </button>
+            <section class="flex">{{challenge}}</section> 
+            <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.build-encounter"}}" data-action="remove" class="flex0 encounter-builder-icon-button">
+              <i class="fas fa-trash"></i>
+            </button>
+          </li>
+          {{/each}}
+      </section>
+      <section class="encounter-builder-adversaries-subsection" style="border: 2px solid green">
+        <h3 class="ed4-encounter-builder">Add More</h3>
+        <section class="flex-row ed4-encounter-builder ed4-encounter-builder-griditem">
+          <input type="text" value="{{filter}}" name="filter" placeholder="search by name" data-dtype="String" onkeyup="EncounterBuilderForm._handleFilter(event)" class="flex"/>
+        </section>
+        <ul class="nav-ul">
+          {{#each adversaries}}
+            <li class="flexrow ed4-encounter-builder ed4-encounter-builder-griditem" data-encounter-adversary-id="{{id}}">
+              <input class="flex0" type="text" value="1" name="{{id}}.count" data-dtype="Number" data-action="count"/>
+              <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.build-encounter"}}" data-action="add" class="flex0 encounter-builder-icon-button">
+                <i class="fas fa-plus"></i>
+              </button>
+              <img class="flex0 encounter-builder-adversary-img" src="{{img}}" alt="{{name}}" />
+              <section class="flex">{{name}}</section>
+              <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.view-adversary"}}" data-action="view-adversary" class="flex0 encounter-builder-icon-button">
+                <i class="fas fa-eye"></i>
+              </button>
+              <section class="flex">{{challenge}}</section> 
+            </li>
+          {{/each}}
+        </ul>
+      </section>
+    </section>
+  </section>
+
+  <section>
+    <h2>{{ localize "ED4-ENCOUNTERBUILDER.encounter-details-section" }}</h2>
+    <section class="encounter-builder-details-section flexrow">
+      <section class="encounter-builder-details-subsection" style="border: 2px solid darkred;">
+        <h3 class="ed4-encounter-builder">Environment</h3>
+        <textarea class="flex0" rows="4" name="encounter-environment-{{encounter.id}}" placeholder="list any traps or terrain features here"onchange="EncounterBuilderForm.updateValue()">{{encounter.environment}}</textarea>
+      </section>
+      <section class="encounter-builder-details-subsection" style="border: 2px solid darkred">
+        <h3 class="ed4-encounter-builder">Tactics</h3>
+        <textarea class="flex0" rows="4" name="encounter-tactics-{{encounter.id}}" placeholder="list any enemy tactics here"onchange="EncounterBuilderForm.updateValue()">{{encounter.tactics}}</textarea>
+      </section>
+      <section class="encounter-builder-details-subsection" style="border: 2px solid darkred">
+        <h3 class="ed4-encounter-builder">Rewards</h3>
+        <textarea class="flex0" rows="4" name="encounter-rewards-{{encounter.id}}" placeholder="list any rewards here"onchange="EncounterBuilderForm.updateValue()">{{encounter.rewards}}</textarea>
+      </section>
+    </section>
+  </section>
+
+  <section class="description-editor">
+    <h2>{{ localize "ED4-ENCOUNTERBUILDER.encounter-description" }}</h2>
+    <section class="encounter-builder-description-section flexrow">
+      <div class="form-group stacked">
+          
+        <textarea class="flex0" rows="5" name="encounter-description-{{encounter.id}}" placeholder="Encounter Description..." onchange="EncounterBuilderForm.updateValue()">{{encounter.description}}</textarea>
+      </div>
+    </section>
+  </section>
+
+
+
+  <button type="button" data-action="done">{{localize "ED4-ENCOUNTERBUILDER.done"}}</button>
+</form> 

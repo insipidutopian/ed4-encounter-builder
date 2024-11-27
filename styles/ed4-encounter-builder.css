@@ -1,0 +1,97 @@
+.encounter-builder-icon-button {
+  background: transparent;
+  padding: 0;
+  color: white;
+  line-height: normal;
+  border: 0;
+  align-self: center;
+}
+
+.encounter-builder-icon-button > i {
+  margin-right: 0;
+}
+
+.encounter-builder-icon-button:hover, .encounter-builder-icon-button:focus {
+  box-shadow: none;
+  text-shadow: 0 0 5px red;
+}
+
+.encounter-list {
+  padding: 0;
+  margin-top: 0;
+  gap: 1em;
+}
+
+.encounter-list > li {
+  align-items: center;
+  gap: 1em;
+}
+
+.encounter-builder-challenge-section {
+  display: flex;
+  flex-flow: row wrap;
+  
+  margin: 0; 
+ 
+}
+
+.encounter-builder-adversaries-section {
+  display: flex;
+  flex-flow: row wrap;
+  
+  margin: 0; 
+/*  background: lightgreen;*/
+}
+.encounter-builder-challenge-subsection {
+  width: 40%;
+}  
+.encounter-builder-pcs-subsection {
+  width: 60%;
+}  
+.encounter-builder-adversaries-subsection {
+  width: 50%;
+}
+
+.encounter-builder-details-section {
+  display: flex;
+  flex-flow: row wrap;
+  
+  margin: 0; 
+  /*background: red;*/
+}
+
+.nav-ul {
+  height:100px;
+  overflow:hidden; overflow-y:scroll;
+}
+
+.encounter-builder-description-section {
+  display: flex;
+  flex-flow: row wrap;
+/*  height: 200px;*/
+  margin: 0; 
+/*  background: gold;*/
+}
+
+.ed4-encounter-builder-griditem.hidden {
+  display: none;
+}
+
+.difficulty-gauge {
+  display: block;
+  border: 0;
+  margin: auto;
+}
+
+.ed4-encounter-builder-griditem {
+  align-items: center;
+  gap: 5px;
+}
+
+.encounter-builder-adversary-img {
+  padding: 0;
+  line-height: normal;
+  border: 0;
+  align-self: center;
+  max-width: 25px;
+}

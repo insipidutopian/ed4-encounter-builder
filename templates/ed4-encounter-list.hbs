@@ -1,0 +1,21 @@
+<form>
+  <ul class="ed4-encounter-list flexcol">
+    <li class="flexrow"><strong>Mark Done</strong><strong>Name</strong><strong>Edit</strong><strong>Delete</strong></li>
+    {{#each encounters}}
+    <li class="flexrow" data-encounter-list-id="{{id}}">
+      <input type="checkbox" name="{{id}}.isDone" title="{{localize "ED4-ENCOUNTERBUILDER.mark-done"}}" data-dtype="Boolean" {{checked isDone}} />
+
+      <input type="text" value="{{label}}" name="{{id}}.label" data-dtype="String" class="flex"/>
+
+      <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.build-encounter"}}" data-action="build" class="flex0 encounter-builder-icon-button">
+        <i class="fas fa-pen"></i>
+      </button>
+      <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.delete-encounter"}}" data-action="delete" class="flex0 encounter-builder-icon-button">
+        <i class="fas fa-trash"></i>
+      </button>
+    </li>
+    {{/each}}
+  </ul>
+
+  <button type="button" data-action="create"><i class="fas fa-plus"></i> {{localize "ED4-ENCOUNTERBUILDER.create-encounter"}}</button>
+</form> 

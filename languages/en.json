@@ -1,0 +1,28 @@
+{
+  "ED4-ENCOUNTERBUILDER": {
+    "button-title": "Open Encounter Builder",
+    "create-encounter": "Create Encounter",
+    "delete-encounter": "Delete Encounter",
+    "build-encounter": "Build Encounter",
+    "mark-done": "Mark Encounter Completed",
+    "view-adversary": "View Adversary",
+    "encounter-description": "Description",
+    "encounter-details-section": "Details",
+    "encounter-name-label": "Encounter",
+    "encounter-challenge-section": "Encounter Challenge",
+    "encounter-adversaries-section": "Adversaries",
+    "done": "Done Editing",
+    "settings": {
+      "inject-button": {
+        "Name": "Display ED4 Encounter Builder?",
+        "Hint": "Controls whether or not the Encounter Builder can be opened from the UI."
+      }
+    },
+    "confirms": {
+      "deleteConfirm": {
+        "Title": "Confirm Deletion",
+        "Content": "Are you sure you want to delete this? This action cannot be undone."
+      }
+    }
+  }
+}
