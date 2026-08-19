@@ -28,6 +28,8 @@
       "enemies-label": "Enemies",
       "add-more-label": "Add More",
       "search-inputhint": "search by name",
+      "crfilter-inputhint": "filter by Challenge",
+      "crfiltermax-inputhint": "Max Challenge",
       "environment-inputhint": "list any traps or terrain features here",
       "tactics-inputhint": "list any enemy tactics here",
       "rewards-inputhint": "list any rewards here",

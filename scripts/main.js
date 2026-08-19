@@ -51,7 +51,7 @@ class Ed4EncounterBuilder {
   }
 
   static compendiums = { // Support GM's Guide                  Companion,                                 Panda Bestiary,                             ?Travar?,                     Iopos,                         and ?Vasgothia?
-    "Creatures":       [ "earthdawn-gm-compendium.creatures",  /*"earthdawn-companion.companion-creatures",*/ "earthdawn-panda-bestiary.panda-bestiary",  "ed-travar.travar-creatures",                                "vasgothia.creatures-vasgothia" ],
+    "Creatures":       [ "earthdawn-gm-compendium.creatures",  "earthdawn-companion.companion-creatures", "earthdawn-panda-bestiary.panda-bestiary",  "ed-travar.travar-creatures",                                "vasgothia.creatures-vasgothia" ],
     "Masks":           [                                       "earthdawn-companion.masks",                                                                                         "earthdawn-iopos.masks-iopos", "vasgothia.masks-vasgothia"]
   }
   static compendiumsNeedToBeLoaded = true;
@@ -60,18 +60,28 @@ class Ed4EncounterBuilder {
 
   static initialize() {
     //this.ed4EncounterListForm = new Ed4EncounterListForm();
+    Ed4EncounterBuilder.log(false, "initialize() called");
 
-    game.settings.register(this.ID, this.SETTINGS.INJECT_BUTTON, {
-      name: `ED4-ENCOUNTERBUILDER.settings.${this.SETTINGS.INJECT_BUTTON}.Name`,
-      default: true,
-      type: Boolean,
-      scope: 'client',
-      config: true,
-      onChange: () => ui.sidebar.render(),
-      hint: `ED4-ENCOUNTERBUILDER.settings.${this.SETTINGS.INJECT_BUTTON}.Hint`
+    // game.settings.register(this.ID, this.SETTINGS.INJECT_BUTTON, {
+    //   name: `ED4-ENCOUNTERBUILDER.settings.${this.SETTINGS.INJECT_BUTTON}.Name`,
+    //   default: true,
+    //   type: Boolean,
+    //   scope: 'client',
+    //   config: true,
+    //   onChange: () => ui.sidebar.render(),
+    //   hint: `ED4-ENCOUNTERBUILDER.settings.${this.SETTINGS.INJECT_BUTTON}.Hint`
+    // });
+
+    Hooks.on("renderSidebar", (app, html, data) => {
+      const myButton = $('<button class="custom-button"><i class="fas fa-plus"></i> My Action</button>');
+      html.find('.sidebar-footer').append(myButton);
+      myButton.click(() => {
+          ui.notifications.info("Button Clicked!");
+          // Perform action
+      });
     });
 
-    Ed4EncounterBuilder.log(false, "initialize() called");
+    Ed4EncounterBuilder.log(false, "registered ED4 Encounter Builder Sidebar button...");
 
     this.encounterListForm = new EncounterListForm();
     this.encounterBuilderForm = new EncounterBuilderForm();
@@ -156,9 +166,61 @@ class Ed4EncounterBuilder {
     this.compendiumsLoaded[compendiumName] = true;
   }
 
+  static getChallengeNumberFromString(challenge, name) {
+    if (!challenge) {
+      if (name?.toUpperCase().includes("SR")){
+        Ed4EncounterBuilder.log(false, `encounter difficulty of ${name}: ` + Number(name.slice(name?.indexOf("SR")+3)));
+        return Number(name.slice(name?.indexOf("SR")+3));
+      }
+      return 1;
+    } else {
+      if (Number.isInteger(challenge)) 
+        return challenge;
 
+      if (challenge?.toLowerCase().includes("fifteen") || challenge?.includes("15"))
+        return 15;
+      if (challenge.toLowerCase().includes("fourteen") || challenge.includes("14"))
+        return 14;
+      if (challenge.toLowerCase().includes("thirteen") || challenge.includes("13"))
+        return 13;
+      if (challenge.toLowerCase().includes("twel") || challenge.includes("12"))
+        return 12;
+      if (challenge.toLowerCase().includes("eleven") || challenge.includes("11"))
+        return 11;
+      if (challenge.toLowerCase().includes("ten") || challenge.includes("10"))
+        return 10;
+      if (challenge.toLowerCase().includes("nin") || challenge.includes("9"))
+        return 9;
+      if (challenge.toLowerCase().includes("eight") || challenge.includes("8"))
+        return 8;
+      if (challenge.toLowerCase().includes("seven") || challenge.includes("7"))
+        return 7;
+      if (challenge.toLowerCase().includes("six") || challenge.includes("6"))
+        return 6;
+      if (challenge.toLowerCase().includes("fifth") || challenge.toLowerCase().includes("five") || challenge.includes("5"))
+        return 5;
+      if (challenge.toLowerCase().includes("four") || challenge.includes("4"))
+        return 4;
+      if (challenge.toLowerCase().includes("three") || challenge.toLowerCase().includes("third") || challenge.includes("3"))
+        return 3;
+      if (challenge.toLowerCase().includes("two") || challenge.toLowerCase().includes("second") || challenge.includes("2"))
+        return 2;
+  }
+    return 1;
+  }
+  static guessCreatureChallenge(creature) {
+    let guess = 1;
+    if (creature.system.challenge) {
+      guess = this.getChallengeNumberFromString(creature.system.challenge, creature.name);
+    }
+    return guess;
+  }
   static addCompendiumItemToAdversaries(id, creature, compendium) {
-    creature = { name: creature.name, challenge: creature.system.challenge, id: id, type: creature.type, img: creature.img, compendium: compendium};
+    if (creature.system.challenge === undefined || creature.system.challenge === "") {
+      creature.system.challenge = this.guessCreatureChallenge(creature);
+      Ed4EncounterBuilder.log(false, "compendium item had no challenge, setting default:");
+    }
+    creature = { name: creature.name, challenge: this.guessCreatureChallenge(creature), id: id, type: creature.type, img: creature.img, compendium: compendium};
     this.adversaries.push(creature);
   }
 
@@ -215,7 +277,7 @@ class Ed4EncounterBuilder {
  */
 
 Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
-  registerPackageDebugFlag(Ed4EncounterBuilder.ID, true);
+  registerPackageDebugFlag(Ed4EncounterBuilder.ID);
   console.log("ed4-encounter-builder | registerPackageDebugFlag true");
 });
 
@@ -288,6 +350,8 @@ class EncounterData {
   }
 
   static filter = "";
+  static crFilter = "";
+  static crMaxFilter = "";
 
   static get allAdversaries() {
     Ed4EncounterBuilder.loadCompendiums(false);
@@ -295,9 +359,31 @@ class EncounterData {
     return Ed4EncounterBuilder.adversaries;
   }
 
+  static crFiltered(creatureChallenge) {
+    if (!this.crFilter || this.crFilter === "" ) {
+      if (this.crMaxFilter && this.crMaxFilter !== "") {
+        if (creatureChallenge > this.crMaxFilter)
+          return true;
+      }
+      //Ed4EncounterBuilder.log(false, "filter: " + this.crFilter);
+      return false;
+    }
+
+    if (this.crMaxFilter && this.crMaxFilter !== "") {
+      if (creatureChallenge >= this.crFilter && creatureChallenge <= this.crMaxFilter)
+        return false;
+      return true;
+    } 
+    if (this.crFilter != creatureChallenge) {
+      
+      //Ed4EncounterBuilder.log(false, "filter: " + this.crFilter);
+      return true;
+    }
+
+  }
   static get filteredAdversaries() {
     
-    return Ed4EncounterBuilder.adversaries.filter((creature) => creature.name.toUpperCase().includes(this.filter.toUpperCase()));
+    return Ed4EncounterBuilder.adversaries.filter((creature) => !this.crFiltered(creature.challenge) && creature.name.toUpperCase().includes(this.filter.toUpperCase()));
   }
 
 
@@ -498,6 +584,37 @@ class EncounterListForm extends FormApplication {
  */
 
 class EncounterBuilderForm extends FormApplication {
+  constructor (object, options) {
+    // const dropHookId = Hooks.on('ed4-encounter-builder-onDropDocument', () => {
+    //   Ed4EncounterBuilder.log(false, "onDropDocument called");
+    //   // dragPositionStore.update(data => {
+    //   //   return {
+    //   //     ...data,
+    //   //     w: 1,
+    //   //     h: 1,
+    //   //     flipped: false
+    //   //   }
+    //   // });
+    // });
+
+    // const dragHookId = Hooks.on('ed4-encounter-builder-onDragDocument', () => {
+    //   Ed4EncounterBuilder.log(false, "onDragDocument called");
+    //   // dragPositionStore.update(data => {
+    //   //   return {
+    //   //     ...data,
+    //   //     w: 1,
+    //   //     h: 1,
+    //   //     flipped: false
+    //   //   }
+    //   // });
+    // });
+
+    
+
+    super(object, options);
+  }
+
+
   static get defaultOptions() {
     const defaults = super.defaultOptions;
     
@@ -510,15 +627,52 @@ class EncounterBuilderForm extends FormApplication {
       encounterId: null,
       height: 720,
       width: 800,
+      // dragDrop: [{dropSelector: "section[name='adversaries']"}],
+      dragDrop: [{ dropSelector: ".encounter-builder-adversaries-section",
+                  permissions: { dragstart: () => true, dragdrop: () => true },
+                  callbacks: { dragstart: () => console.log("drag start"), drop: () => console.log("dropped")}
+      }],
+                  // callbacks: { dragstart: this._onDragStart(app.object), drop: this._onDrop(app.object) /*onDropActor: this._onDropActor.bind(this)*/ }}],
+      // dragDrop: [{dragSelector: "ed4-encounter-builder-griditem", 
+      //             dropSelector: ".encounter-builder-adversaries-subsection", 
+      //             callbacks: { dragstart: this._onDragStart.bind(this), drop: this._onDragDrop.bind(this) }
+      //           }],
       closeOnSubmit: false, // do not close when submitted
       //submitOnChange: true, // submit when any input changes
     };
-
+    
     const mergedOptions = foundry.utils.mergeObject(defaults, overrides);
     
+    // const dragDrop = new DragDrop( {
+    //   //dragSelector: () => {Ed4EncounterBuilder.log(false, "dragSelector called")},
+    //   dropSelector: ".encounter-builder-adversaries-subsection", //css selector of drop target ie section with class encounter-builder-adversaries-subsection
+    //   callbacks: { dragstart: this._onDragStart.bind(this), drop: this._onDragDrop.bind(this) }, 
+    // });
+    //dragDrop.bind(html);
     return mergedOptions;
   }
 
+
+  // // static _onDragDrop(t) {
+  // static _onDragDrop = (effectParent) => (event) => {
+  //   Ed4EncounterBuilder.log(false, "dropped called");
+  //   console.log("dropped called");
+  // }
+
+  // // static _onDragStart(t) {
+  // static _onDragStart = (effectParent) => (event) => {
+  //   Ed4EncounterBuilder.log(false, "drag called");
+  //   console.log("drag called");
+  // }
+  // static _onDropActor(data) {
+  //   Ed4EncounterBuilder.log(false, "In _onDropActor");
+  //   console.log("************* DROPPED AN ACTOR ****************");
+  //   return true;
+  // }
+  // /** @override */
+  // async _onDropItemCreate(itemData) {
+  //   Ed4EncounterBuilder.log(false, "In _onDropItemCreate");
+  // }
   static updateValue() {
     const clickedElement = $(event.currentTarget);
     const value = clickedElement[0]?.value;
@@ -668,6 +822,42 @@ class EncounterBuilderForm extends FormApplication {
       if (EncounterData.filteredAdversaries.find((element) => element.id === el.dataset.encounterAdversaryId) ) { 
         el.classList.remove("hidden");
         Ed4EncounterBuilder.log(false, "setting " + el.dataset.encounterAdversaryId + " to visible");
+      } else {
+        el.classList.add("hidden");
+      }
+    }
+  }
+
+  static _handleCRFilter(event) {
+    console.log(event);
+    Ed4EncounterBuilder.log(false, "CR filter text is: " + event.srcElement.value);
+    EncounterData.crFilter = Number.parseInt(event.srcElement.value);
+    
+    const adversariesRowEls = event.srcElement.parentNode.parentNode.querySelectorAll("li.ed4-encounter-builder-griditem");
+    for (const el of adversariesRowEls) {
+      if (EncounterData.filteredAdversaries.find((element) => element.id === el.dataset.encounterAdversaryId) ) { 
+        if (el.classList.contains("hidden")) {
+          el.classList.remove("hidden");
+          Ed4EncounterBuilder.log(false, "setting " + el.dataset.encounterAdversaryId + " to visible");
+        }
+      } else {
+        el.classList.add("hidden");
+      }
+    }
+  }
+
+  static _handleCRMaxFilter(event) {
+    console.log(event);
+    Ed4EncounterBuilder.log(false, "CR Max filter text is: " + event.srcElement.value);
+    EncounterData.crMaxFilter = Number.parseInt(event.srcElement.value);
+    
+    const adversariesRowEls = event.srcElement.parentNode.parentNode.querySelectorAll("li.ed4-encounter-builder-griditem");
+    for (const el of adversariesRowEls) {
+      if (EncounterData.filteredAdversaries.find((element) => element.id === el.dataset.encounterAdversaryId) ) { 
+        if (el.classList.contains("hidden")) {
+          el.classList.remove("hidden");
+          Ed4EncounterBuilder.log(false, "setting " + el.dataset.encounterAdversaryId + " to visible");
+        }
       } else {
         el.classList.add("hidden");
       }
