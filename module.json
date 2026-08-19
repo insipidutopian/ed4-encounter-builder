@@ -4,7 +4,7 @@
       "name": "Joel Waterman"
     }
   ],
-  "version": "#{VERSION}#",
+  "version": "1.2.0",
   "title": "Insipidutopian's ED4 Encounter Builder",
   "description": "A simple module which provides encounter building support for the Earthdawn 4e system.",
   "languages": [
@@ -15,16 +15,16 @@
     }
   ],
   "compatibility": {
-    "minimum": "12",
-    "verified": "12"
+    "minimum": "13",
+    "verified": "13"
   },
   "relationships": {
     "systems": [{
-      "id": "earthdawn4e",
+      "id": "ed4e",
       "type": "system",
-      "manifest": "https://gitlab.com/fattom23/earthdawn4e/-/raw/0.8.0-production/system.json",
+      "manifest": "https://github.com/earthdawn-vtt/fvtt-earthdawn4e/system.json",
       "compatibility": {
-        "verified": "0.8.0"
+        "verified": "0.2.0"
       }
     }],
     "requires": [{
@@ -39,7 +39,7 @@
   "styles": [
     "styles/ed4-encounter-builder.css"
   ],
-  "url": "#{URL}#",
-  "manifest": "#{MANIFEST}#",
-  "download": "#{DOWNLOAD}#"
+  "url": "https://github.com/insipidutopian/ed4-encounter-builder/",
+  "manifest": "https://github.com/insipidutopian/ed4-encounter-builder/blob/main/module.json",
+  "download": "https://github.com/insipidutopian/ed4-encounter-builder/releases/tag/1.0.4"
 }
