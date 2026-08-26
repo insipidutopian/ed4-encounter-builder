@@ -1,21 +1,46 @@
-<form>
-  <ul class="ed4-encounter-list flexcol">
-    <li class="flexrow"><strong>{{localize "ED4-ENCOUNTERBUILDER.list-form.mark-done-label"}}</strong><strong>{{localize "ED4-ENCOUNTERBUILDER.list-form.encounter-name-label"}}</strong></li>
-    {{#each encounters}}
-    <li class="flexrow" data-encounter-list-id="{{id}}">
-      <input type="checkbox" name="{{id}}.isDone" title="{{localize "ED4-ENCOUNTERBUILDER.list-form.mark-done"}}" data-dtype="Boolean" {{checked isDone}} />
+<div class="ed4-encounter-list-container" style="position: relative; z-index: 1; min-height: 250px; padding: 4px;">
+    
+    <!-- BACKGROUND IMAGE LAYER -->
+    <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+                background-image: url('modules/ed4-encounter-builder/assets/color-mask.png'); 
+                background-size: cover; background-position: center; 
+                opacity: 0.15; z-index: -1; pointer-events: none;">
+    </div>
 
-      <input type="text" value="{{label}}" name="{{id}}.label" data-dtype="String" class="flex"/>
+    <!-- HEADER -->
+    <header class="flexrow" style="align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid var(--color-border-dark-1);">
+        <h3 style="margin: 0;">{{localize "ED4-ENCOUNTERBUILDER.list-form.encounter-name-label"}}</h3>
+        
+        <button type="button" data-action="create" style="flex: 0 0 auto; width: auto; padding: 0 10px; line-height: 24px;">
+            <i class="fas fa-plus"></i> {{localize "ED4-ENCOUNTERBUILDER.list-form.create-encounter"}}
+        </button>
+    </header>
 
-      <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.list-form.build-encounter"}}" data-action="build" class="flex0 encounter-builder-icon-button">
-        <i class="fas fa-pen"></i>
-      </button>
-      <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.list-form.delete-encounter"}}" data-action="delete" class="flex0 encounter-builder-icon-button">
-        <i class="fas fa-trash"></i>
-      </button>
-    </li>
-    {{/each}}
-  </ul>
+    <!-- LIST BODY -->
+    <ul style="list-style: none; margin: 0; padding: 0;">
+        {{#each encounters as |encounter|}}
+        <li class="encounter-list-item flexrow" data-encounter-list-id="{{encounter.id}}" style="align-items: center; margin-bottom: 6px; padding: 4px; border-bottom: 1px solid var(--color-border-light-2);">
+            
+            <!-- CHECKBOX -->
+            <div class="encounter-is-done" style="flex: 0 0 30px; text-align: center;">
+                <input type="checkbox" name="isDone" {{checked encounter.isDone}} title="{{localize 'ED4-ENCOUNTERBUILDER.list-form.mark-done'}}"/>
+            </div>
 
-  <button type="button" data-action="create"><i class="fas fa-plus"></i> {{localize "ED4-ENCOUNTERBUILDER.list-form.create-encounter"}}</button>
-</form> 
+            <!-- NAME INPUT -->
+            <div class="encounter-name" style="flex: 1; padding: 0 8px;">
+                <input type="text" name="name" value="{{encounter.name}}" placeholder="{{localize 'ED4-ENCOUNTERBUILDER.list-form.encounter-name-label'}}" style="width: 100%;" />
+            </div>
+
+            <!-- ACTION BUTTONS -->
+            <div class="encounter-actions flexrow" style="flex: 0 0 60px; justify-content: flex-end; gap: 6px; padding-right: 4px;">
+                <a data-action="build" title="{{localize 'ED4-ENCOUNTERBUILDER.list-form.build-encounter'}}" style="padding: 4px; background: rgba(0, 0, 0, 0.05); border-radius: 4px; border: 1px solid var(--color-border-light-1); text-align: center;">
+                    <i class="fas fa-edit"></i>
+                </a>
+                <a data-action="delete" title="{{localize 'ED4-ENCOUNTERBUILDER.list-form.delete-encounter'}}" style="padding: 4px; background: rgba(0, 0, 0, 0.05); border-radius: 4px; border: 1px solid var(--color-border-light-1); text-align: center; color: var(--color-text-dark-primary);">
+                    <i class="fas fa-trash"></i>
+                </a>
+            </div>
+        </li>
+        {{/each}}
+    </ul>
+</div>
