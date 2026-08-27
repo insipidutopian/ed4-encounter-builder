@@ -120,9 +120,18 @@
 
   </section>
 
-  <!-- FIXED FOOTER -->
   <footer style="flex: 0 0 auto;">
-    <button type="button" data-action="done" style="width: 100%;">{{localize "ED4-ENCOUNTERBUILDER.builder-form.done-button-text"}}</button>
+    <div class="flexrow" style="gap: 6px; width: 100%;">
+      <!-- Done Button -->
+      <button type="button" data-action="done" class="flex1">
+        {{localize "ED4-ENCOUNTERBUILDER.builder-form.done-button-text"}}
+      </button>
+      
+      <!-- Send to Combat Button -->
+      <button type="button" data-action="send-to-combat" class="flex1" title="{{localize 'ED4-ENCOUNTERBUILDER.builder-form.send-to-combat'}}">
+        <i class="fas fa-fist-raised"></i> {{localize "ED4-ENCOUNTERBUILDER.builder-form.send-to-combat"}}
+      </button>
+    </div>
   </footer>
 
 </div>

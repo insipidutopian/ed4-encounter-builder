@@ -117,193 +117,421 @@ class Ed4EncounterBuilder {
     //Ed4EncounterBuilder.loadCompendiums();
   }
 
+  //spawn
+static async spawnEncounterTokens(encounterId) {
+  const encounter = EncounterData.allEncounters?.[encounterId];
+  Ed4EncounterBuilder.log(false, `[Spawn] ==================== START SPAWN/SYNC ====================`);
 
-static compendiums = {
-  "Creatures": [
-    "earthdawn-gm-compendium.game-masters-guide-creatures",
-    "earthdawn-companion.companion-creatures",
-    "earthdawn-panda-bestiary.panda-bestiary",
-    "ed-travar.travar-creatures",
-    "vasgothia.creatures-vasgothia"
-  ]
-};
-
-/**
- * Dynamically resolves installed compendiums matching Actor document types and creature patterns.
- */
-static getCreaturePacks() {
-  return Array.from(game.packs.values()).filter(pack => {
-    // Only target Actor compendiums
-    if (pack.documentName !== "Actor") return false;
-
-    const collectionKey = pack.collection.toLowerCase();
-
-    // Match base keys defined in static compendiums array or common creature key patterns
-    const matchesConfigured = this.compendiums["Creatures"].some(baseKey => 
-      collectionKey.startsWith(baseKey.toLowerCase())
-    );
-
-    const matchesPattern = collectionKey.includes("creatures") || collectionKey.includes("bestiary");
-
-    return matchesConfigured || matchesPattern;
-  });
-}
-
-static async loadCompendiums(forceFlag = false) {
-  if (!forceFlag && !this.compendiumsNeedToBeLoaded) return;
-
-  if (!game.ready) {
-    Ed4EncounterBuilder.log(true, "Game is not ready yet. Deferring compendium load.");
-    return;
+  if (!encounter) {
+    ui.notifications.warn("Encounter not found.");
+    return [];
   }
 
-  this.adversaries = [];
-  const targetPacks = this.getCreaturePacks();
-
-  if (targetPacks.length === 0) {
-    Ed4EncounterBuilder.log(true, "No creature actor compendiums found in this world.");
-    return;
+  const activeScene = canvas.scene || game.scenes.viewed;
+  if (!activeScene) {
+    ui.notifications.warn("No active scene found to check tokens on.");
+    return [];
   }
 
-  Ed4EncounterBuilder.log(
-    true, 
-    `Found ${targetPacks.length} creature pack(s): ${targetPacks.map(p => p.collection).join(", ")}`
-  );
+  // Map out scene tokens by actor reference and name for tracking
+  const sceneActorCounts = new Map(); // Key: identifier, Value: count
+  const sceneTokensByActor = new Map(); // Key: identifier, Value: array of token documents
 
-  // Load all matched pack collections concurrently
-  await Promise.all(targetPacks.map(pack => this.loadCompendium(pack.collection)));
+  if (activeScene.tokens) {
+    for (const tokenDoc of activeScene.tokens) {
+      const identifiers = new Set();
+      if (tokenDoc.actorId) identifiers.add(tokenDoc.actorId);
+      if (tokenDoc.actor?.id) identifiers.add(tokenDoc.actor.id);
+      
+      const docUuid = tokenDoc.actor?.uuid || tokenDoc.uuid || tokenDoc._source?.actorId;
+      if (docUuid) identifiers.add(docUuid);
 
-  this.compendiumsNeedToBeLoaded = false;
-  Ed4EncounterBuilder.log(true, `Done loading compendiums. Total adversaries loaded: ${this.adversaries.length}`);
-}
+      if (tokenDoc.name) {
+        const cleanName = tokenDoc.name.replace(/\([^)]*\)/g, '').trim().toLowerCase();
+        identifiers.add(cleanName);
+      }
 
-static async loadCompendium(compendiumName) {
-  try {
-    const pack = game.packs.get(compendiumName);
-    if (!pack) {
-      Ed4EncounterBuilder.log(true, `Compendium pack not found: ${compendiumName}`);
+      for (const idKey of identifiers) {
+        sceneActorCounts.set(idKey, (sceneActorCounts.get(idKey) || 0) + 1);
+        
+        if (!sceneTokensByActor.has(idKey)) {
+          sceneTokensByActor.set(idKey, []);
+        }
+        // Avoid duplicate entry if multiple identifiers match the same tokenDoc
+        const tokenList = sceneTokensByActor.get(idKey);
+        if (!tokenList.includes(tokenDoc)) {
+          tokenList.push(tokenDoc);
+        }
+      }
+    }
+  }
+
+  const spawnedTokensData = [];
+  const tokenIdsToRemove = [];
+  let xOffset = 100;
+  let yOffset = 100;
+
+  async function processActorToken(rawId, requestedCount = 1) {
+    let actor = game.actors.get(rawId) || (await fromUuid(rawId));
+
+    if (!actor) {
+      for (let pack of game.packs.values()) {
+        if (pack.documentName === "Actor") {
+          try {
+            actor = await pack.getDocument(rawId);
+            if (actor) break;
+          } catch (e) {}
+        }
+      }
+    }
+
+    if (!actor) {
+      Ed4EncounterBuilder.log(true, `[Spawn-Process] ERROR: Could not find actor for ID/UUID: ${rawId}`);
       return;
     }
 
-    Ed4EncounterBuilder.log(false, `Loading documents from compendium pack: ${compendiumName}`);
+    const cleanActorName = actor.name.replace(/\([^)]*\)/g, '').trim().toLowerCase();
+    const parts = cleanActorName.split(',').map(p => p.trim());
+    const flippedName = parts.length > 1 ? `${parts.slice(1).join(' ')} ${parts[0]}`.toLowerCase() : null;
 
-    // Bypass pack.getIndex() to avoid the Foundry V13 backend projection crash.
-    // Fetching the full documents guarantees we get the data without the server tripping over schema inconsistencies.
-    const docs = await pack.getDocuments();
+    // Gather all possible keys for this actor to check scene presence
+    const possibleKeys = [actor.id, rawId, actor.uuid, cleanActorName];
+    if (flippedName) possibleKeys.push(flippedName);
 
-    Ed4EncounterBuilder.log(false, `Found ${docs.length} entries in pack '${compendiumName}'. Processing...`);
+    let currentCount = 0;
+    let matchedKey = null;
 
-    for (const doc of docs) {
-      // Skip player characters if they happen to be in the compendium
-      if (doc.type === "character") continue; 
-
-      this.addCompendiumIndexToAdversaries(doc, compendiumName);
+    for (const key of possibleKeys) {
+      if (sceneActorCounts.has(key)) {
+        currentCount = sceneActorCounts.get(key);
+        matchedKey = key;
+        break;
+      }
     }
 
-    Ed4EncounterBuilder.log(false, `Successfully loaded adversaries from ${compendiumName}`);
-  } catch (e) {
-    Ed4EncounterBuilder.log(true, `Error loading compendium ${compendiumName}:`, e);
+    // Substring fallback check if exact keys miss
+    if (currentCount === 0) {
+      for (const [nameKey, cnt] of sceneActorCounts.entries()) {
+        if (nameKey.includes(cleanActorName) || cleanActorName.includes(nameKey)) {
+          currentCount = cnt;
+          matchedKey = nameKey;
+          break;
+        }
+      }
+    }
+
+    Ed4EncounterBuilder.log(false, `[Spawn-Process] Actor "${actor.name}" -> Requested: ${requestedCount}, Found on scene: ${currentCount}`);
+
+    if (currentCount < requestedCount) {
+      // Need to spawn missing tokens
+      const tokensNeeded = requestedCount - currentCount;
+      Ed4EncounterBuilder.log(false, `[Spawn-Process] PASS: Spawning ${tokensNeeded} new token(s) for: ${actor.name}`);
+      for (let i = 0; i < tokensNeeded; i++) {
+        spawnedTokensData.push({
+          name: actor.name,
+          actorId: actor.id,
+          x: xOffset,
+          y: yOffset,
+          hidden: false,
+          ...actor.prototypeToken.toObject()
+        });
+        xOffset += 70; 
+        if (xOffset > 800) { xOffset = 100; yOffset += 70; }
+      }
+    } else if (currentCount > requestedCount && matchedKey) {
+      // Scene has excess tokens compared to builder count -> queue for removal
+      const excessCount = currentCount - requestedCount;
+      const tokensOfThisActor = sceneTokensByActor.get(matchedKey) || [];
+      
+      // Grab from the end of the array to prune excess
+      for (let i = 0; i < excessCount && i < tokensOfThisActor.length; i++) {
+        const tokenDocToPrune = tokensOfThisActor[tokensOfThisActor.length - 1 - i];
+        if (tokenDocToPrune && !tokenIdsToRemove.includes(tokenDocToPrune.id)) {
+          tokenIdsToRemove.push(tokenDocToPrune.id);
+        }
+      }
+    }
   }
+
+  // 1. Process Adversaries
+  if (encounter.enemies) {
+    for (const enemy of encounter.enemies) {
+      await processActorToken(enemy.id, enemy.count || 1);
+    }
+  }
+
+  // 2. Process PCs
+  if (encounter.pcs) {
+    for (const pcEntry of encounter.pcs) {
+      await processActorToken(pcEntry.id, 1);
+    }
+  }
+
+  // Handle Pruning (Excess tokens removed from builder) with User Confirmation
+  if (tokenIdsToRemove.length > 0) {
+    const tokensToPruneDocs = tokenIdsToRemove.map(id => activeScene.tokens.get(id)).filter(Boolean);
+    const tokenNamesStr = tokensToPruneDocs.map(t => t.name).join(", ");
+
+    const confirmed = await Dialog.confirm({
+      title: "Prune Encounter Tokens?",
+      content: `<p>The encounter builder has reduced counts for: <b>${tokenNamesStr}</b>.</p><p>Would you like to remove the excess token(s) from this scene?</p>`,
+      yes: () => true,
+      no: () => false,
+      defaultYes: false
+    });
+
+    if (confirmed) {
+      try {
+        await activeScene.deleteEmbeddedDocuments("Token", tokenIdsToRemove);
+        Ed4EncounterBuilder.log(false, `[Spawn] Successfully pruned ${tokenIdsToRemove.length} excess token(s) from scene.`);
+      } catch (err) {
+        Ed4EncounterBuilder.log(true, `[Spawn] Error pruning token documents:`, err);
+      }
+    }
+  }
+
+  // Handle Spawning (Missing tokens added to builder)
+  let allTargetTokens = [...activeScene.tokens];
+
+  if (spawnedTokensData.length > 0) {
+    try {
+      const createdTokens = await activeScene.createEmbeddedDocuments("Token", spawnedTokensData);
+      Ed4EncounterBuilder.log(false, `[Spawn] Successfully created ${createdTokens.length} new tokens on scene.`);
+      allTargetTokens = [...activeScene.tokens];
+    } catch (err) {
+      Ed4EncounterBuilder.log(true, `[Spawn] Error creating token documents:`, err);
+    }
+  } else if (spawnedTokensData.length === 0 && tokenIdsToRemove.length === 0) {
+    Ed4EncounterBuilder.log(false, `[Spawn] Scene tokens are already perfectly synchronized with encounter builder.`);
+  }
+
+  Ed4EncounterBuilder.log(false, `[Spawn] ==================== END SPAWN/SYNC ====================`);
+  return allTargetTokens;
 }
 
-static addCompendiumIndexToAdversaries(entry, compendium) {
-    // 1. DUMP THE RAW SYSTEM DATA FOR INSPECTION
-    // Open your browser console (F12) to expand these objects and look for the correct path
-    Ed4EncounterBuilder.log(
-      false, 
-      `[Schema Inspection] "${entry.name}" (Type: ${entry.type}) | System Data:`, 
-      entry.system
-    );
+  static async sendEncounterToCombat(createdTokens) {
+    if (!createdTokens || createdTokens.length === 0) {
+      ui.notifications.warn("No tokens provided to send to combat.");
+      return;
+    }
 
-    // 2. Extract the challenge rating, including the new challenge.rate path
-    const challengeRaw = entry.system?.challenge?.rate
-                      ?? entry.system?.details?.circle
-                      ?? entry.system?.circle
-                      ?? entry.system?.challenge
-                      ?? entry.system?.cr;
+    try {
+      // 1. Create a new Combat encounter in the world
+      // (Foundry automatically sets it as the viewed/active combat tracker if desired)
+      const combat = await Combat.create({ scene: canvas.scene.id, active: true });
+      if (!combat) {
+        ui.notifications.error("Failed to create a new combat encounter.");
+        return;
+      }
 
-    const challengeNum = this.getChallengeNumberFromString(challengeRaw, entry.name);
+      // 2. Format the spawned tokens into combatant creation data
+      const combatantData = createdTokens.map(token => ({
+        tokenId: token.id,
+        actorId: token.actorId,
+        hidden: token.hidden
+      }));
 
-    // 3. Log what we actually extracted vs what it resolved to
-    Ed4EncounterBuilder.log(
-      false, 
-      `[Adversary Indexed] "${entry.name}" | Extracted Raw Value:`, 
-      challengeRaw, 
-      `| Resolved Rating: EC/CR ${challengeNum}`
-    );
+      // 3. Add the combatants to the newly created combat encounter
+      await combat.createEmbeddedDocuments("Combatant", combatantData);
 
-    this.adversaries.push({
-      id: entry.id || entry._id, // getDocuments uses .id, getIndex uses ._id
-      name: entry.name,
-      challenge: challengeNum,
-      type: entry.type,
-      img: entry.img || "icons/svg/mystery-man.svg",
-      compendium: compendium
+      ui.notifications.info(`Successfully created combat tracker with ${combatantData.length} combatants!`);
+      Ed4EncounterBuilder.log(false, `Combat created successfully with ID: ${combat.id}`);
+
+      // Optional: Roll initiative automatically for everyone
+      // await combat.rollAll();
+
+    } catch (err) {
+      Ed4EncounterBuilder.log(true, "Error creating combat encounter:", err);
+      ui.notifications.error("An error occurred while sending the encounter to combat. Check console for details.");
+    }
+  }
+
+  static compendiums = {
+    "Creatures": [
+      "earthdawn-gm-compendium.game-masters-guide-creatures",
+      "earthdawn-companion.companion-creatures",
+      "earthdawn-panda-bestiary.panda-bestiary",
+      "ed-travar.travar-creatures",
+      "vasgothia.creatures-vasgothia"
+    ]
+  };
+
+  /**
+   * Dynamically resolves installed compendiums matching Actor document types and creature patterns.
+   */
+  static getCreaturePacks() {
+    return Array.from(game.packs.values()).filter(pack => {
+      // Only target Actor compendiums
+      if (pack.documentName !== "Actor") return false;
+
+      const collectionKey = pack.collection.toLowerCase();
+
+      // Match base keys defined in static compendiums array or common creature key patterns
+      const matchesConfigured = this.compendiums["Creatures"].some(baseKey => 
+        collectionKey.startsWith(baseKey.toLowerCase())
+      );
+
+      const matchesPattern = collectionKey.includes("creatures") || collectionKey.includes("bestiary");
+
+      return matchesConfigured || matchesPattern;
     });
   }
 
-static getChallengeNumberFromString(challenge, name) {
-  const originalInput = challenge;
+  static async loadCompendiums(forceFlag = false) {
+    if (!forceFlag && !this.compendiumsNeedToBeLoaded) return;
 
-  // 1. Unpack object schemas
-  if (typeof challenge === "object" && challenge !== null) {
-    challenge = challenge.value ?? challenge.total ?? challenge.circle ?? challenge.cr;
-    Ed4EncounterBuilder.log(false, `[CR Parse] Unpacked object schema for "${name}":`, originalInput, `=>`, challenge);
+    if (!game.ready) {
+      Ed4EncounterBuilder.log(true, "Game is not ready yet. Deferring compendium load.");
+      return;
+    }
+
+    this.adversaries = [];
+    const targetPacks = this.getCreaturePacks();
+
+    if (targetPacks.length === 0) {
+      Ed4EncounterBuilder.log(true, "No creature actor compendiums found in this world.");
+      return;
+    }
+
+    Ed4EncounterBuilder.log(
+      true, 
+      `Found ${targetPacks.length} creature pack(s): ${targetPacks.map(p => p.collection).join(", ")}`
+    );
+
+    // Load all matched pack collections concurrently
+    await Promise.all(targetPacks.map(pack => this.loadCompendium(pack.collection)));
+
+    this.compendiumsNeedToBeLoaded = false;
+    Ed4EncounterBuilder.log(true, `Done loading compendiums. Total adversaries loaded: ${this.adversaries.length}`);
   }
 
-  // 2. Direct numeric check
-  if (typeof challenge === "number" && !isNaN(challenge)) {
-    Ed4EncounterBuilder.log(false, `[CR Parse] Raw number matched for "${name}": ${challenge}`);
-    return challenge;
-  }
+  static async loadCompendium(compendiumName) {
+    try {
+      const pack = game.packs.get(compendiumName);
+      if (!pack) {
+        Ed4EncounterBuilder.log(true, `Compendium pack not found: ${compendiumName}`);
+        return;
+      }
 
-  const challengeStr = String(challenge ?? "").toLowerCase().trim();
-  const nameStr = String(name ?? "").toUpperCase();
+      Ed4EncounterBuilder.log(false, `Loading documents from compendium pack: ${compendiumName}`);
 
-  // 3. String numeric conversion
-  const parsed = Number(challengeStr);
-  if (!isNaN(parsed) && challengeStr !== "") {
-    Ed4EncounterBuilder.log(false, `[CR Parse] Parsed numeric string for "${name}": "${challengeStr}" => ${parsed}`);
-    return parsed;
-  }
+      // Bypass pack.getIndex() to avoid the Foundry V13 backend projection crash.
+      // Fetching the full documents guarantees we get the data without the server tripping over schema inconsistencies.
+      const docs = await pack.getDocuments();
 
-  // 4. Substring / Word Match
-  const wordMap = [
-    { words: ["fifteen", "15"], val: 15 },
-    { words: ["fourteen", "14"], val: 14 },
-    { words: ["thirteen", "13"], val: 13 },
-    { words: ["twel", "12"], val: 12 },
-    { words: ["eleven", "11"], val: 11 },
-    { words: ["ten", "10"], val: 10 },
-    { words: ["nin", "9"], val: 9 },
-    { words: ["eight", "8"], val: 8 },
-    { words: ["seven", "7"], val: 7 },
-    { words: ["six", "6"], val: 6 },
-    { words: ["fifth", "five", "5"], val: 5 },
-    { words: ["four", "4"], val: 4 },
-    { words: ["three", "third", "3"], val: 3 },
-    { words: ["two", "second", "2"], val: 2 }
-  ];
+      Ed4EncounterBuilder.log(false, `Found ${docs.length} entries in pack '${compendiumName}'. Processing...`);
 
-  for (const { words, val } of wordMap) {
-    if (words.some(w => challengeStr.includes(w))) {
-      Ed4EncounterBuilder.log(false, `[CR Parse] Word match for "${name}": "${challengeStr}" => ${val}`);
-      return val;
+      for (const doc of docs) {
+        // Skip player characters if they happen to be in the compendium
+        if (doc.type === "character") continue; 
+
+        this.addCompendiumIndexToAdversaries(doc, compendiumName);
+      }
+
+      Ed4EncounterBuilder.log(false, `Successfully loaded adversaries from ${compendiumName}`);
+    } catch (e) {
+      Ed4EncounterBuilder.log(true, `Error loading compendium ${compendiumName}:`, e);
     }
   }
 
-  // 5. Name fallback match (e.g. "Gorgon Circle 4")
-  const srMatch = nameStr.match(/(?:SR|CIRCLE)\s*(\d+)/i);
-  if (srMatch) {
-    const val = Number(srMatch[1]);
-    Ed4EncounterBuilder.log(false, `[CR Parse] Name Regex match for "${name}": ${val}`);
-    return val;
-  }
+  static addCompendiumIndexToAdversaries(entry, compendium) {
+      // 1. DUMP THE RAW SYSTEM DATA FOR INSPECTION
+      // Open your browser console (F12) to expand these objects and look for the correct path
+      Ed4EncounterBuilder.log(
+        false, 
+        `[Schema Inspection] "${entry.name}" (Type: ${entry.type}) | System Data:`, 
+        entry.system
+      );
 
-  // 6. Default fallback
-  Ed4EncounterBuilder.log(true, `[CR Parse] Fallback to default (1) for "${name}". Raw input was:`, originalInput);
-  return 1;
-}
+      // 2. Extract the challenge rating, including the new challenge.rate path
+      const challengeRaw = entry.system?.challenge?.rate
+                        ?? entry.system?.details?.circle
+                        ?? entry.system?.circle
+                        ?? entry.system?.challenge
+                        ?? entry.system?.cr;
+
+      const challengeNum = this.getChallengeNumberFromString(challengeRaw, entry.name);
+
+      // 3. Log what we actually extracted vs what it resolved to
+      Ed4EncounterBuilder.log(
+        false, 
+        `[Adversary Indexed] "${entry.name}" | Extracted Raw Value:`, 
+        challengeRaw, 
+        `| Resolved Rating: EC/CR ${challengeNum}`
+      );
+
+      this.adversaries.push({
+        id: entry.id || entry._id, // getDocuments uses .id, getIndex uses ._id
+        name: entry.name,
+        challenge: challengeNum,
+        type: entry.type,
+        img: entry.img || "icons/svg/mystery-man.svg",
+        compendium: compendium
+      });
+    }
+
+  static getChallengeNumberFromString(challenge, name) {
+    const originalInput = challenge;
+
+    // 1. Unpack object schemas
+    if (typeof challenge === "object" && challenge !== null) {
+      challenge = challenge.value ?? challenge.total ?? challenge.circle ?? challenge.cr;
+      Ed4EncounterBuilder.log(false, `[CR Parse] Unpacked object schema for "${name}":`, originalInput, `=>`, challenge);
+    }
+
+    // 2. Direct numeric check
+    if (typeof challenge === "number" && !isNaN(challenge)) {
+      Ed4EncounterBuilder.log(false, `[CR Parse] Raw number matched for "${name}": ${challenge}`);
+      return challenge;
+    }
+
+    const challengeStr = String(challenge ?? "").toLowerCase().trim();
+    const nameStr = String(name ?? "").toUpperCase();
+
+    // 3. String numeric conversion
+    const parsed = Number(challengeStr);
+    if (!isNaN(parsed) && challengeStr !== "") {
+      Ed4EncounterBuilder.log(false, `[CR Parse] Parsed numeric string for "${name}": "${challengeStr}" => ${parsed}`);
+      return parsed;
+    }
+
+    // 4. Substring / Word Match
+    const wordMap = [
+      { words: ["fifteen", "15"], val: 15 },
+      { words: ["fourteen", "14"], val: 14 },
+      { words: ["thirteen", "13"], val: 13 },
+      { words: ["twel", "12"], val: 12 },
+      { words: ["eleven", "11"], val: 11 },
+      { words: ["ten", "10"], val: 10 },
+      { words: ["nin", "9"], val: 9 },
+      { words: ["eight", "8"], val: 8 },
+      { words: ["seven", "7"], val: 7 },
+      { words: ["six", "6"], val: 6 },
+      { words: ["fifth", "five", "5"], val: 5 },
+      { words: ["four", "4"], val: 4 },
+      { words: ["three", "third", "3"], val: 3 },
+      { words: ["two", "second", "2"], val: 2 }
+    ];
+
+    for (const { words, val } of wordMap) {
+      if (words.some(w => challengeStr.includes(w))) {
+        Ed4EncounterBuilder.log(false, `[CR Parse] Word match for "${name}": "${challengeStr}" => ${val}`);
+        return val;
+      }
+    }
+
+    // 5. Name fallback match (e.g. "Gorgon Circle 4")
+    const srMatch = nameStr.match(/(?:SR|CIRCLE)\s*(\d+)/i);
+    if (srMatch) {
+      const val = Number(srMatch[1]);
+      Ed4EncounterBuilder.log(false, `[CR Parse] Name Regex match for "${name}": ${val}`);
+      return val;
+    }
+
+    // 6. Default fallback
+    Ed4EncounterBuilder.log(true, `[CR Parse] Fallback to default (1) for "${name}". Raw input was:`, originalInput);
+    return 1;
+  }
   
   static async _getCompendiumItem(compendiumName, itemName) {
     try {
@@ -524,7 +752,7 @@ class EncounterData {
     return Ed4EncounterBuilder.adversaries.filter((creature) => !this.crFiltered(creature.challenge) && creature.name.toUpperCase().includes(this.filter.toUpperCase()));
   }
 
-
+  
   /**
    * Gets all of a given user's Encounters
    * 
@@ -778,6 +1006,7 @@ class EncounterBuilderForm extends HandlebarsApplicationMixin(foundry.applicatio
     actions: {
       done: EncounterBuilderForm.#onDone,
       remove: EncounterBuilderForm.#onRemoveEnemy,
+      'send-to-combat': EncounterBuilderForm.#onSendToCombat,
       add: EncounterBuilderForm.#onAddEnemy,
       'toggle-pc': EncounterBuilderForm.#onTogglePc,
       'view-adversary': EncounterBuilderForm.#onViewAdversary,
@@ -1019,7 +1248,18 @@ class EncounterBuilderForm extends HandlebarsApplicationMixin(foundry.applicatio
     }
   }
 
-  // Add static method to class:
+  static async #onSendToCombat(event, target) {
+    const encounterId = this.currentEncounterId || target.closest("form")?.dataset?.encounterId;
+  
+    // Step 1: Spawn tokens on the canvas
+    const createdTokens = await Ed4EncounterBuilder.spawnEncounterTokens(encounterId);
+    
+    // Step 2: Push those tokens into a new Combat tracker encounter
+    if (createdTokens.length > 0) {
+      await Ed4EncounterBuilder.sendEncounterToCombat(createdTokens);
+    }
+  }
+
   static async #onGenerateReward(event, target) {
     const encId = this.currentEncounterId;
     const encounter = EncounterData.allEncounters?.[encId];
