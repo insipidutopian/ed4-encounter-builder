@@ -59,29 +59,56 @@ class Ed4EncounterBuilder {
   static adversaries = [];
 
   static initialize() {
-    //this.ed4EncounterListForm = new Ed4EncounterListForm();
     Ed4EncounterBuilder.log(false, "initialize() called");
 
-    // game.settings.register(this.ID, this.SETTINGS.INJECT_BUTTON, {
-    //   name: `ED4-ENCOUNTERBUILDER.settings.${this.SETTINGS.INJECT_BUTTON}.Name`,
-    //   default: true,
-    //   type: Boolean,
-    //   scope: 'client',
-    //   config: true,
-    //   onChange: () => ui.sidebar.render(),
-    //   hint: `ED4-ENCOUNTERBUILDER.settings.${this.SETTINGS.INJECT_BUTTON}.Hint`
-    // });
+    Hooks.on("renderCombatTracker", (app, element, context, options) => {
+      Ed4EncounterBuilder.log(false, "renderCombatTracker hook called");
+      // 1. Check if our button already exists to prevent duplicates on re-render
+      if (element.querySelector(".encounter-designer-btn")) return;
+      Ed4EncounterBuilder.log(false, "creating encounter designer button");
 
-    Hooks.on("renderSidebar", (app, html, data) => {
-      const myButton = $('<button class="custom-button"><i class="fas fa-plus"></i> My Action</button>');
-      html.find('.sidebar-footer').append(myButton);
-      myButton.click(() => {
-          ui.notifications.info("Button Clicked!");
-          // Perform action
+      // 2. Find the footer or action area inside the combat tab content
+      const footer = element.querySelector(".directory-footer") || element.querySelector("footer") || element.querySelector(".encounters-footer");
+      const targetArea = footer || element.querySelector(".tab-content") || element;
+
+      // 3. Create the wide button element
+      const designerBtn = document.createElement("button");
+      designerBtn.type = "button";
+      
+      // Use flexbox and justify-content center to center the text and icon
+      designerBtn.classList.add("combat-button","encounter-designer-btn"); 
+      designerBtn.style.display = "flex";
+      designerBtn.style.alignItems = "center";
+      designerBtn.style.justifyContent = "center";
+      designerBtn.style.gap = "8px"; // Space between icon and text
+      
+      // Add margin/padding so it doesn't slam against the edges of the sidebar
+      designerBtn.style.width = "calc(100% - 16px)";
+      designerBtn.style.margin = "8px auto";
+      designerBtn.style.padding = "6px 12px";
+
+      // Add an icon and the requested text
+      const buttonText = game.i18n.localize("ED4-ENCOUNTERBUILDER.button-title");
+      designerBtn.innerHTML = `<i class="fas fa-swords"></i> ${buttonText}`;
+
+      // 4. Attach your click listener
+      designerBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          Ed4EncounterBuilder.log(false, "Encounter Designer button clicked!");
+          
+          // Open the Encounter List Form UI
+          if (Ed4EncounterBuilder.encounterListForm) {
+              Ed4EncounterBuilder.encounterListForm.render(true, { userId: game.userId });
+          } else {
+              new EncounterListForm().render(true, { userId: game.userId });
+          }
       });
-    });
 
+      // 5. Append the button to the bottom of the tab layout
+      targetArea.append(designerBtn);
+    }); 
     Ed4EncounterBuilder.log(false, "registered ED4 Encounter Builder Sidebar button...");
+
 
     this.encounterListForm = new EncounterListForm();
     this.encounterBuilderForm = new EncounterBuilderForm();
@@ -90,29 +117,194 @@ class Ed4EncounterBuilder {
     //Ed4EncounterBuilder.loadCompendiums();
   }
 
-  static loadCompendiums(forceFlag = false) {
-    if (forceFlag || this.compendiumsNeedToBeLoaded) {
-      this.adversaries = [];
-      Ed4EncounterBuilder.log(false, "loading compendiums");
-      for (let i = 0; i < this.compendiums["Creatures"].length; i++) {
-        Ed4EncounterBuilder.log(false, "Checking for compendium " + this.compendiums["Creatures"][i]);
-        if (game.packs.has(this.compendiums["Creatures"][i])) {
-          Ed4EncounterBuilder.log(false, "Attempting to load compendium...");
-          this.loadCompendium(this.compendiums["Creatures"][i]);
-        }
-      }
-      while (this.compendiumsLoaded.includes(false)) {
-        this.sleep(500).then(() => {
-         Ed4EncounterBuilder.log(false, "Compendiums loading...");
-        });
-      }
-      Ed4EncounterBuilder.log(false, "done loading compendiums");
-      this.compendiumsNeedToBeLoaded = false;
-    } else {
-      Ed4EncounterBuilder.log(false, "skipped loading compendiums: ff: " + forceFlag + ", cn2bl: " + this.compendiumsNeedToBeLoaded);
+
+static compendiums = {
+  "Creatures": [
+    "earthdawn-gm-compendium.game-masters-guide-creatures",
+    "earthdawn-companion.companion-creatures",
+    "earthdawn-panda-bestiary.panda-bestiary",
+    "ed-travar.travar-creatures",
+    "vasgothia.creatures-vasgothia"
+  ]
+};
+
+/**
+ * Dynamically resolves installed compendiums matching Actor document types and creature patterns.
+ */
+static getCreaturePacks() {
+  return Array.from(game.packs.values()).filter(pack => {
+    // Only target Actor compendiums
+    if (pack.documentName !== "Actor") return false;
+
+    const collectionKey = pack.collection.toLowerCase();
+
+    // Match base keys defined in static compendiums array or common creature key patterns
+    const matchesConfigured = this.compendiums["Creatures"].some(baseKey => 
+      collectionKey.startsWith(baseKey.toLowerCase())
+    );
+
+    const matchesPattern = collectionKey.includes("creatures") || collectionKey.includes("bestiary");
+
+    return matchesConfigured || matchesPattern;
+  });
+}
+
+static async loadCompendiums(forceFlag = false) {
+  if (!forceFlag && !this.compendiumsNeedToBeLoaded) return;
+
+  if (!game.ready) {
+    Ed4EncounterBuilder.log(true, "Game is not ready yet. Deferring compendium load.");
+    return;
+  }
+
+  this.adversaries = [];
+  const targetPacks = this.getCreaturePacks();
+
+  if (targetPacks.length === 0) {
+    Ed4EncounterBuilder.log(true, "No creature actor compendiums found in this world.");
+    return;
+  }
+
+  Ed4EncounterBuilder.log(
+    true, 
+    `Found ${targetPacks.length} creature pack(s): ${targetPacks.map(p => p.collection).join(", ")}`
+  );
+
+  // Load all matched pack collections concurrently
+  await Promise.all(targetPacks.map(pack => this.loadCompendium(pack.collection)));
+
+  this.compendiumsNeedToBeLoaded = false;
+  Ed4EncounterBuilder.log(true, `Done loading compendiums. Total adversaries loaded: ${this.adversaries.length}`);
+}
+
+static async loadCompendium(compendiumName) {
+  try {
+    const pack = game.packs.get(compendiumName);
+    if (!pack) {
+      Ed4EncounterBuilder.log(true, `Compendium pack not found: ${compendiumName}`);
+      return;
+    }
+
+    Ed4EncounterBuilder.log(false, `Loading documents from compendium pack: ${compendiumName}`);
+
+    // Bypass pack.getIndex() to avoid the Foundry V13 backend projection crash.
+    // Fetching the full documents guarantees we get the data without the server tripping over schema inconsistencies.
+    const docs = await pack.getDocuments();
+
+    Ed4EncounterBuilder.log(false, `Found ${docs.length} entries in pack '${compendiumName}'. Processing...`);
+
+    for (const doc of docs) {
+      // Skip player characters if they happen to be in the compendium
+      if (doc.type === "character") continue; 
+
+      this.addCompendiumIndexToAdversaries(doc, compendiumName);
+    }
+
+    Ed4EncounterBuilder.log(false, `Successfully loaded adversaries from ${compendiumName}`);
+  } catch (e) {
+    Ed4EncounterBuilder.log(true, `Error loading compendium ${compendiumName}:`, e);
+  }
+}
+
+static addCompendiumIndexToAdversaries(entry, compendium) {
+    // 1. DUMP THE RAW SYSTEM DATA FOR INSPECTION
+    // Open your browser console (F12) to expand these objects and look for the correct path
+    Ed4EncounterBuilder.log(
+      false, 
+      `[Schema Inspection] "${entry.name}" (Type: ${entry.type}) | System Data:`, 
+      entry.system
+    );
+
+    // 2. Extract the challenge rating, including the new challenge.rate path
+    const challengeRaw = entry.system?.challenge?.rate
+                      ?? entry.system?.details?.circle
+                      ?? entry.system?.circle
+                      ?? entry.system?.challenge
+                      ?? entry.system?.cr;
+
+    const challengeNum = this.getChallengeNumberFromString(challengeRaw, entry.name);
+
+    // 3. Log what we actually extracted vs what it resolved to
+    Ed4EncounterBuilder.log(
+      false, 
+      `[Adversary Indexed] "${entry.name}" | Extracted Raw Value:`, 
+      challengeRaw, 
+      `| Resolved Rating: EC/CR ${challengeNum}`
+    );
+
+    this.adversaries.push({
+      id: entry.id || entry._id, // getDocuments uses .id, getIndex uses ._id
+      name: entry.name,
+      challenge: challengeNum,
+      type: entry.type,
+      img: entry.img || "icons/svg/mystery-man.svg",
+      compendium: compendium
+    });
+  }
+
+static getChallengeNumberFromString(challenge, name) {
+  const originalInput = challenge;
+
+  // 1. Unpack object schemas
+  if (typeof challenge === "object" && challenge !== null) {
+    challenge = challenge.value ?? challenge.total ?? challenge.circle ?? challenge.cr;
+    Ed4EncounterBuilder.log(false, `[CR Parse] Unpacked object schema for "${name}":`, originalInput, `=>`, challenge);
+  }
+
+  // 2. Direct numeric check
+  if (typeof challenge === "number" && !isNaN(challenge)) {
+    Ed4EncounterBuilder.log(false, `[CR Parse] Raw number matched for "${name}": ${challenge}`);
+    return challenge;
+  }
+
+  const challengeStr = String(challenge ?? "").toLowerCase().trim();
+  const nameStr = String(name ?? "").toUpperCase();
+
+  // 3. String numeric conversion
+  const parsed = Number(challengeStr);
+  if (!isNaN(parsed) && challengeStr !== "") {
+    Ed4EncounterBuilder.log(false, `[CR Parse] Parsed numeric string for "${name}": "${challengeStr}" => ${parsed}`);
+    return parsed;
+  }
+
+  // 4. Substring / Word Match
+  const wordMap = [
+    { words: ["fifteen", "15"], val: 15 },
+    { words: ["fourteen", "14"], val: 14 },
+    { words: ["thirteen", "13"], val: 13 },
+    { words: ["twel", "12"], val: 12 },
+    { words: ["eleven", "11"], val: 11 },
+    { words: ["ten", "10"], val: 10 },
+    { words: ["nin", "9"], val: 9 },
+    { words: ["eight", "8"], val: 8 },
+    { words: ["seven", "7"], val: 7 },
+    { words: ["six", "6"], val: 6 },
+    { words: ["fifth", "five", "5"], val: 5 },
+    { words: ["four", "4"], val: 4 },
+    { words: ["three", "third", "3"], val: 3 },
+    { words: ["two", "second", "2"], val: 2 }
+  ];
+
+  for (const { words, val } of wordMap) {
+    if (words.some(w => challengeStr.includes(w))) {
+      Ed4EncounterBuilder.log(false, `[CR Parse] Word match for "${name}": "${challengeStr}" => ${val}`);
+      return val;
     }
   }
 
+  // 5. Name fallback match (e.g. "Gorgon Circle 4")
+  const srMatch = nameStr.match(/(?:SR|CIRCLE)\s*(\d+)/i);
+  if (srMatch) {
+    const val = Number(srMatch[1]);
+    Ed4EncounterBuilder.log(false, `[CR Parse] Name Regex match for "${name}": ${val}`);
+    return val;
+  }
+
+  // 6. Default fallback
+  Ed4EncounterBuilder.log(true, `[CR Parse] Fallback to default (1) for "${name}". Raw input was:`, originalInput);
+  return 1;
+}
+  
   static async _getCompendiumItem(compendiumName, itemName) {
     try {
       const pack = game.packs.get(compendiumName);
@@ -136,78 +328,9 @@ class Ed4EncounterBuilder {
     }
   }
 
-  static loadCompendium(compendiumName) {
-    try {
-      Ed4EncounterBuilder.log(false, "Loading {} compendium pack", compendiumName)
-      const pack = this._getCompendiumPack(compendiumName);
-      this.compendiumsLoaded[compendiumName] = false;
-      var compendiumCreatureCount = 0;
-      if (pack) {
-        Ed4EncounterBuilder.log(false, "got a pack");
+  
+  
 
-        for ( const c of Array.from(game.packs.get(compendiumName).index)) {
-          Ed4EncounterBuilder.log(false, "found " + c.name + ", id" + c.id + " ...");
-          this._getCompendiumItem(compendiumName, c.name).then(i => {
-            if (compendiumCreatureCount < 3) {
-              Ed4EncounterBuilder.log(false, "Found sample creature -> name: " + i.name + ", CR: " + i.system.challenge);
-            }
-            c._comp = compendiumName;
-            this.addCompendiumItemToAdversaries(c._id, i, compendiumName);
-          });
-          compendiumCreatureCount += 1;
-        }
-      }
-    } catch (e) {
-      Ed4EncounterBuilder.log(false, "Unable to load {} compendium", compendiumName, ":")
-      Ed4EncounterBuilder.log(false, e);
-    }
-    
-    Ed4EncounterBuilder.log(false, "compendium contained " + compendiumCreatureCount + " creatures.");
-    this.compendiumsLoaded[compendiumName] = true;
-  }
-
-  static getChallengeNumberFromString(challenge, name) {
-    if (!challenge) {
-      if (name?.toUpperCase().includes("SR")){
-        Ed4EncounterBuilder.log(false, `encounter difficulty of ${name}: ` + Number(name.slice(name?.indexOf("SR")+3)));
-        return Number(name.slice(name?.indexOf("SR")+3));
-      }
-      return 1;
-    } else {
-      if (Number.isInteger(challenge)) 
-        return challenge;
-
-      if (challenge?.toLowerCase().includes("fifteen") || challenge?.includes("15"))
-        return 15;
-      if (challenge.toLowerCase().includes("fourteen") || challenge.includes("14"))
-        return 14;
-      if (challenge.toLowerCase().includes("thirteen") || challenge.includes("13"))
-        return 13;
-      if (challenge.toLowerCase().includes("twel") || challenge.includes("12"))
-        return 12;
-      if (challenge.toLowerCase().includes("eleven") || challenge.includes("11"))
-        return 11;
-      if (challenge.toLowerCase().includes("ten") || challenge.includes("10"))
-        return 10;
-      if (challenge.toLowerCase().includes("nin") || challenge.includes("9"))
-        return 9;
-      if (challenge.toLowerCase().includes("eight") || challenge.includes("8"))
-        return 8;
-      if (challenge.toLowerCase().includes("seven") || challenge.includes("7"))
-        return 7;
-      if (challenge.toLowerCase().includes("six") || challenge.includes("6"))
-        return 6;
-      if (challenge.toLowerCase().includes("fifth") || challenge.toLowerCase().includes("five") || challenge.includes("5"))
-        return 5;
-      if (challenge.toLowerCase().includes("four") || challenge.includes("4"))
-        return 4;
-      if (challenge.toLowerCase().includes("three") || challenge.toLowerCase().includes("third") || challenge.includes("3"))
-        return 3;
-      if (challenge.toLowerCase().includes("two") || challenge.toLowerCase().includes("second") || challenge.includes("2"))
-        return 2;
-  }
-    return 1;
-  }
   static guessCreatureChallenge(creature) {
     let guess = 1;
     if (creature.system.challenge) {
@@ -227,7 +350,7 @@ class Ed4EncounterBuilder {
 
 
   static get getPcs() {
-    const pcsList =  game.actors.filter(p => p.type == 'pc').filter(p => canvas.tokens.placeables.find(c => c.name == p.prototypeToken.name))
+    const pcsList =  game.actors.filter(p => p.type == 'character').filter(p => canvas.tokens.placeables.find(c => c.name == p.prototypeToken.name))
     pcsList.forEach((pc) => Ed4EncounterBuilder.calculatePcEffectiveCircle(pc));
     return pcsList;
   }
@@ -253,19 +376,37 @@ class Ed4EncounterBuilder {
 
 
   static calculatePcEffectiveCircle(pc) {
-    Ed4EncounterBuilder.log(false, "Calculating effective circle for " + pc.name + " with LP: " + pc.system.legendpointtotal)
-    if (pc.system.legendpointtotal < 800)
+    Ed4EncounterBuilder.log(false, "Calculating effective circle for " + pc.name + " with LP: " + pc.system.lp.total)
+    if (pc.system.lp.total < 800)
       Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",1);
-    else if (pc.system.legendpointtotal < 2300) 
+    else if (pc.system.lp.total < 2300) 
       Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",2);
-    else if (pc.system.legendpointtotal < 7000) 
+    else if (pc.system.lp.total < 7000) 
       Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",3);
-    else if (pc.system.legendpointtotal < 16500) 
+    else if (pc.system.lp.total < 16500) 
       Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",4);
-    else if (pc.system.legendpointtotal < 35000) 
+    else if (pc.system.lp.total < 35000) 
       Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",5);
-    else 
+    else if (pc.system.lp.total < 70000) 
       Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",6);
+    else if (pc.system.lp.total < 132000) 
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",7);
+    else if (pc.system.lp.total < 255000) 
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",8);
+    else if (pc.system.lp.total < 490000)
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",9);
+    else if (pc.system.lp.total < 922000)
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",10);
+    else if (pc.system.lp.total < 1695000)
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",11);
+    else if (pc.system.lp.total < 3175000)
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",12);
+    else if (pc.system.lp.total < 6050000)
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",13);
+    else if (pc.system.lp.total < 11200000)
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",14);
+    else
+      Ed4EncounterBuilder.setEd4FlagOnActor(pc, "effectiveCircle",15);
   }
 
 } // Ed4EncounterBuilder class
@@ -275,6 +416,10 @@ class Ed4EncounterBuilder {
             Hooks
 
  */
+
+Hooks.once('ready', async () => {
+  await Ed4EncounterBuilder.loadCompendiums(true);
+});
 
 Hooks.once('devModeReady', ({ registerPackageDebugFlag }) => {
   registerPackageDebugFlag(Ed4EncounterBuilder.ID);
@@ -298,17 +443,10 @@ Hooks.once('init', async function() {
 
   Ed4EncounterBuilder.log(false, "Registering Handlebars helpers");
 
-  Handlebars.registerHelper('pcIsInEncounter', function (pcId, encounterId) {
-    Ed4EncounterBuilder.log(false, `Checking encounter ${encounterId} for pc ${pcId}`);
-    const allEncounters = EncounterData.allEncounters;
-    if (allEncounters[encounterId]) {
-      Ed4EncounterBuilder.log(false, `Checking encounter ${encounterId} for pc ${pcId}`);
-      if (allEncounters[encounterId].pcs.find((pc) => pc.id == pcId))
-        return true;
-      else 
-        return false;
-    }
-    return false;
+  Handlebars.registerHelper('pcIsInEncounter', function(pcId, encounterId) {
+    const encounter = EncounterData.allEncounters?.[encounterId];
+    if (!encounter || !encounter.pcs) return false;
+    return encounter.pcs.some(pc => pc.id === pcId);
   });
 
   Ed4EncounterBuilder.log(true,  'ED4 Encounter Builder initialized!');
@@ -354,7 +492,7 @@ class EncounterData {
   static crMaxFilter = "";
 
   static get allAdversaries() {
-    Ed4EncounterBuilder.loadCompendiums(false);
+    //await Ed4EncounterBuilder.loadCompendiums(false);
 
     return Ed4EncounterBuilder.adversaries;
   }
@@ -498,255 +636,446 @@ class EncounterData {
 
  */
 
-class EncounterListForm extends FormApplication {
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-  static get defaultOptions() {
-    const defaults = super.defaultOptions;
-    
-    const overrides = {
-      height: 'auto',
-      id: 'encounter-list',
-      template: Ed4EncounterBuilder.TEMPLATES.ENCLIST,
+class EncounterListForm extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    id: 'encounter-list',
+    classes: ['ed4-encounter-list'],
+    tag: 'form',
+    window: {
       title: 'Encounters',
-      userId: game.userId,
-      width: "400",
-      height: "auto",
-      closeOnSubmit: false, // do not close when submitted
-      submitOnChange: true, // submit when any input changes
-    };
+      resizable: true
+    },
+    position: {
+      width: 400,
+      height: 'auto'
+    },
+    form: {
+      handler: EncounterListForm.#onSubmitForm,
+      submitOnChange: true,
+      closeOnSubmit: false
+    },
+    // Match these keys to whatever data-action values are inside your enclist.hbs file
+    actions: {
+      create: EncounterListForm.#onCreateEncounter,
+      build: EncounterListForm.#onBuildEncounter,
+      delete: EncounterListForm.#onDeleteEncounter
+    }
+  };
 
-    const mergedOptions = foundry.utils.mergeObject(defaults, overrides);
-    
+  static PARTS = {
+    form: {
+      template: Ed4EncounterBuilder.TEMPLATES.ENCLIST
+    }
+  };
 
-    return mergedOptions;
-  }
-
-
-  getData(options) {
+  async _prepareContext(options) {
     return {
-      encounters: EncounterData.getEncountersForUser(options.userId),
+      encounters: EncounterData.getEncountersForUser(this.options.userId || game.userId),
       adversaries: EncounterData.allAdversaries,
+    };
+  }
+
+  static async #onSubmitForm(event, form, formData) {
+    if (!event || !event.target) {
+      const expandedData = foundry.utils.expandObject(formData.object);
+      if (!foundry.utils.isEmpty(expandedData)) {
+         await EncounterData.updateUserEncounters(this.options.userId || game.userId, expandedData);
+      }
+      return;
     }
-  }
 
-  async _updateObject(event, formData) {
+    const target = event.target;
+    const encounterId = target.closest('[data-encounter-list-id]')?.dataset?.encounterListId;
+    if (!encounterId) return;
 
-    const expandedData = foundry.utils.expandObject(formData);
-    Ed4EncounterBuilder.log(false, 'EncounterListForm: saving', {
-      formData,
-      expandedData
-    });
-    await EncounterData.updateUserEncounters(this.options.userId, expandedData);
+    let fieldName = target.name;
+    if (fieldName.includes('.')) {
+        fieldName = fieldName.split('.').pop(); 
+    }
 
-    this.render();
-  }
-
-
-  activateListeners(html) {
-    super.activateListeners(html);
-    html.on('click', "[data-action]", this._handleButtonClick.bind(this));
-    //Ed4EncounterBuilder.log(false, 'Button Clicked!');
-  }
-
-  async _handleButtonClick(event) {
-    const clickedElement = $(event.currentTarget);
-    const action = clickedElement.data().action;
-    const encounterId = clickedElement.parents('[data-encounter-list-id]')?.data()?.encounterListId;
+    const value = target.type === 'checkbox' ? target.checked : target.value;
     
-    Ed4EncounterBuilder.log(false, 'EncounterListForm: Button Clicked!', {this: this, action, encounterId});
-    switch (action) {
-      case 'create': {
-        await EncounterData.createEncounter(this.options.userId);
-        this.render();
-        break;
-      }
-      case 'build': {
-        Ed4EncounterBuilder.encounterBuilderForm.render(true, { /* userId: this.options.userId, */ encounterId: encounterId});
-        break;
-      }
-      case 'delete': {
-        await EncounterData.deleteEncounter(encounterId);
-        this.render();
-        break;
-      }
+    await EncounterData.updateEncounter(encounterId, { 
+        [fieldName]: value 
+    });
+    
+    // Refresh builder form if open for this specific encounter
+    const builder = Ed4EncounterBuilder.encounterBuilderForm;
+    if (builder && builder.rendered && builder.currentEncounterId === encounterId) {
+      builder.render();
+    }
 
-      default:
-        Ed4EncounterBuilder.log(false, 'EncounterListForm: Invalid action detected', action);
+    if (target.type === 'checkbox') {
+        this.render(true)
     }
   }
 
-} // EncounterListForm
+  static async #onCreateEncounter(event, target) {
+    Ed4EncounterBuilder.log(false, 'EncounterListForm: Create Encounter button clicked.');
+    await EncounterData.createEncounter(this.options.userId || game.userId);
+    this.render(true);
+  }
 
+  static async #onBuildEncounter(event, target) {
+    const encounterId = target.closest('[data-encounter-list-id]')?.dataset?.encounterListId 
+                     || target.closest('[data-encounter-list-id]')?.dataset?.encounterBuilderId;
+                     
+    Ed4EncounterBuilder.log(false, `EncounterListForm: Build Encounter button clicked for ID: ${encounterId}`);
+    
+    if (Ed4EncounterBuilder.encounterBuilderForm) {
+      Ed4EncounterBuilder.encounterBuilderForm.encounterId = encounterId; // <-- Assign active ID
+      Ed4EncounterBuilder.encounterBuilderForm.render({force: true} );
+    } else {
+      Ed4EncounterBuilder.encounterBuilderForm = new EncounterBuilderForm({ encounterId });
+      Ed4EncounterBuilder.encounterBuilderForm.render({force: true});
+    }
+  }
+
+  static async #onDeleteEncounter(event, target) {
+    const encounterId = target.closest('[data-encounter-list-id]')?.dataset?.encounterListId;
+    Ed4EncounterBuilder.log(false, `EncounterListForm: Delete Encounter button clicked for ID: ${encounterId}`);
+    
+    await EncounterData.deleteEncounter(encounterId);
+    this.render(true);
+  }
+}
 
 /*
             EncounterBuilderForm
 
  */
 
-class EncounterBuilderForm extends FormApplication {
-  constructor (object, options) {
-    // const dropHookId = Hooks.on('ed4-encounter-builder-onDropDocument', () => {
-    //   Ed4EncounterBuilder.log(false, "onDropDocument called");
-    //   // dragPositionStore.update(data => {
-    //   //   return {
-    //   //     ...data,
-    //   //     w: 1,
-    //   //     h: 1,
-    //   //     flipped: false
-    //   //   }
-    //   // });
-    // });
-
-    // const dragHookId = Hooks.on('ed4-encounter-builder-onDragDocument', () => {
-    //   Ed4EncounterBuilder.log(false, "onDragDocument called");
-    //   // dragPositionStore.update(data => {
-    //   //   return {
-    //   //     ...data,
-    //   //     w: 1,
-    //   //     h: 1,
-    //   //     flipped: false
-    //   //   }
-    //   // });
-    // });
-
-    
-
-    super(object, options);
-  }
-
-
-  static get defaultOptions() {
-    const defaults = super.defaultOptions;
-    
-    const overrides = {
-      height: 'auto',
-      id: 'build-encounter-form',
-      template: Ed4EncounterBuilder.TEMPLATES.ENCBUILDER,
-      title: 'Build Encounter',
-      userId: game.userId,
-      encounterId: null,
-      height: 720,
-      width: 800,
-      // dragDrop: [{dropSelector: "section[name='adversaries']"}],
-      dragDrop: [{ dropSelector: ".encounter-builder-adversaries-section",
-                  permissions: { dragstart: () => true, dragdrop: () => true },
-                  callbacks: { dragstart: () => console.log("drag start"), drop: () => console.log("dropped")}
-      }],
-                  // callbacks: { dragstart: this._onDragStart(app.object), drop: this._onDrop(app.object) /*onDropActor: this._onDropActor.bind(this)*/ }}],
-      // dragDrop: [{dragSelector: "ed4-encounter-builder-griditem", 
-      //             dropSelector: ".encounter-builder-adversaries-subsection", 
-      //             callbacks: { dragstart: this._onDragStart.bind(this), drop: this._onDragDrop.bind(this) }
-      //           }],
-      closeOnSubmit: false, // do not close when submitted
-      //submitOnChange: true, // submit when any input changes
-    };
-    
-    const mergedOptions = foundry.utils.mergeObject(defaults, overrides);
-    
-    // const dragDrop = new DragDrop( {
-    //   //dragSelector: () => {Ed4EncounterBuilder.log(false, "dragSelector called")},
-    //   dropSelector: ".encounter-builder-adversaries-subsection", //css selector of drop target ie section with class encounter-builder-adversaries-subsection
-    //   callbacks: { dragstart: this._onDragStart.bind(this), drop: this._onDragDrop.bind(this) }, 
-    // });
-    //dragDrop.bind(html);
-    return mergedOptions;
-  }
-
-
-  // // static _onDragDrop(t) {
-  // static _onDragDrop = (effectParent) => (event) => {
-  //   Ed4EncounterBuilder.log(false, "dropped called");
-  //   console.log("dropped called");
-  // }
-
-  // // static _onDragStart(t) {
-  // static _onDragStart = (effectParent) => (event) => {
-  //   Ed4EncounterBuilder.log(false, "drag called");
-  //   console.log("drag called");
-  // }
-  // static _onDropActor(data) {
-  //   Ed4EncounterBuilder.log(false, "In _onDropActor");
-  //   console.log("************* DROPPED AN ACTOR ****************");
-  //   return true;
-  // }
-  // /** @override */
-  // async _onDropItemCreate(itemData) {
-  //   Ed4EncounterBuilder.log(false, "In _onDropItemCreate");
-  // }
-  static updateValue() {
-    const clickedElement = $(event.currentTarget);
-    const value = clickedElement[0]?.value;
-    const fieldNameParts = clickedElement[0]?.name?.split('-');
-    const fieldName = fieldNameParts[1];
-    const encounterId = fieldNameParts[2];
-    
-    Ed4EncounterBuilder.log(false, `asked to update encounter ${fieldName} for enc ID: ${encounterId}`);
-    const enc = EncounterData.getEncounter(game.userId, encounterId);
-    if (enc && enc[encounterId]) {
-      Ed4EncounterBuilder.log(false, `updating encounter description: ${fieldName} to: ${value}`);
-      enc[encounterId][fieldName] = value;
-      EncounterData.saveEncounter(encounterId, enc);
+class EncounterBuilderForm extends HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
+  constructor(options = {}) {
+    // Normalize string parameters to object options
+    if (typeof options === "string") {
+      options = { encounterId: options };
     }
-    
+    super(options);
+
+    this.encounterId = options.encounterId || options.id || options.encounter?.id;
   }
-  
 
-  static updateEnemyCount() {
-    const clickedElement = $(event.currentTarget);
-    const action = clickedElement.data().action;
-    const encounterId = clickedElement.parents('[data-encounter-id]')?.data()?.encounterId;
-    const adversaryId = clickedElement.parents('[data-encounter-adversary-id]')?.data()?.encounterAdversaryId;
-    Ed4EncounterBuilder.log(false, "updating adversary count, adversary: " + adversaryId);
-    var adversaryCount = clickedElement.parents('[data-encounter-adversary-id]')?.children()[0].value; //TODO is there a better way to do this
-    Ed4EncounterBuilder.log(false, "this: ", this, " updating adversary count, count: " + adversaryCount);  
+  static DEFAULT_OPTIONS = {
+    id: 'build-encounter-form',
+    classes: ['ed4-encounter-builder'],
+    tag: 'form',
+    window: {
+      title: 'ED4-ENCOUNTERBUILDER.builder-title',
+      resizable: true
+    },
+    position: {
+      width: 800,
+      height: 720
+    },
+    form: {
+      handler: EncounterBuilderForm.#onSubmitForm,
+      submitOnChange: true,
+      closeOnSubmit: false
+    },
+    actions: {
+      done: EncounterBuilderForm.#onDone,
+      remove: EncounterBuilderForm.#onRemoveEnemy,
+      add: EncounterBuilderForm.#onAddEnemy,
+      'toggle-pc': EncounterBuilderForm.#onTogglePc,
+      'view-adversary': EncounterBuilderForm.#onViewAdversary,
+      generateReward: EncounterBuilderForm.#onGenerateReward // <-- ADD ACTION
+    }
+  };
 
-    const enc = EncounterData.getEncounter(game.userId, encounterId);
-    if (enc && enc[encounterId]) {
-      Ed4EncounterBuilder.log(false, `updating adversary id: ${adversaryId}, count: ${adversaryCount}`);
-      var e = enc[encounterId].enemies.find(e => e.id == adversaryId)
-      if (e) {
-        e.count = adversaryCount;
-        this.calculateEncounterDifficulty(encounterId);
-        EncounterData.saveEncounter(encounterId, enc);
-        //cause re-render
-        Ed4EncounterBuilder.encounterBuilderForm.render(true, { encounterId: encounterId});
+  static PARTS = {
+    form: {
+      template: Ed4EncounterBuilder.TEMPLATES.ENCBUILDER
+    }
+  };
+
+  get currentEncounterId() {
+    return this.encounterId || this.options.encounterId || Object.keys(EncounterData.allEncounters || {})[0];
+  }
+
+  async _prepareContext(options) {
+    const encId = this.currentEncounterId;
+    const encounter = EncounterData.allEncounters?.[encId] || {};
+
+    // Filter adversaries dynamically
+    let filteredAdversaries = EncounterData.allAdversaries || [];
+    const textFilter = (EncounterData.filter || "").toLowerCase().trim();
+    const minCr = Number.parseInt(EncounterData.crFilter);
+    const maxCr = Number.parseInt(EncounterData.crMaxFilter);
+
+    if (textFilter || !isNaN(minCr) || !isNaN(maxCr)) {
+      filteredAdversaries = filteredAdversaries.filter(a => {
+        const matchesName = !textFilter || a.name.toLowerCase().includes(textFilter);
+        const crVal = Ed4EncounterBuilder.getChallengeNumberFromString(a.challenge, a.name);
+        const matchesMin = isNaN(minCr) || crVal >= minCr;
+        const matchesMax = isNaN(maxCr) || crVal <= maxCr;
+        return matchesName && matchesMin && matchesMax;
+      });
+    }
+
+    return { 
+      encounter,
+      adversaries: filteredAdversaries,
+      allpcs: Ed4EncounterBuilder.getPcs || [],
+      filter: EncounterData.filter || "",
+      crfilter: EncounterData.crFilter || "",
+      crmaxfilter: EncounterData.crMaxFilter || ""
+    };
+  }
+
+
+
+  _onRender(context, options) {
+    super._onRender(context, options);
+    const html = this.element;
+
+    // 1. Determine active tab (defaults to 'roster' on initial render)
+    const activeTab = this._activeTab || 'roster';
+
+    // 2. Restore active tab state after re-rendering
+    html.querySelectorAll('.sheet-tabs .item').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === activeTab);
+    });
+    html.querySelectorAll('.tab-content .tab').forEach(content => {
+      const isActive = content.dataset.tab === activeTab;
+      content.classList.toggle('active', isActive);
+      content.style.display = isActive ? 'block' : 'none';
+    });
+
+    // 3. Tab Click Listener (saves active tab to instance state)
+    html.querySelectorAll('.sheet-tabs .item').forEach(tab => {
+      tab.addEventListener('click', (event) => {
+        event.preventDefault();
+        const targetTab = event.currentTarget.dataset.tab;
+        
+        // Persist selection across re-renders
+        this._activeTab = targetTab;
+
+        // Toggle Active Tab Header
+        html.querySelectorAll('.sheet-tabs .item').forEach(t => t.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+
+        // Toggle Active Tab Body
+        html.querySelectorAll('.tab-content .tab').forEach(content => {
+          if (content.dataset.tab === targetTab) {
+            content.classList.add('active');
+            content.style.display = 'block';
+          } else {
+            content.classList.remove('active');
+            content.style.display = 'none';
+          }
+        });
+      });
+    });
+
+    // 4. Restore focus and cursor position if an input was active prior to re-render
+    if (this._focusedInput) {
+      const input = html.querySelector(`input[name="${this._focusedInput.name}"]`);
+      if (input) {
+        input.focus();
+        if (typeof input.setSelectionRange === "function" && this._focusedInput.start !== null) {
+          input.setSelectionRange(this._focusedInput.start, this._focusedInput.end);
+        }
+      }
+      this._focusedInput = null;
+    }
+
+    // 5. Attach live input listeners for instant search
+    html.querySelectorAll('input[name="filter"], input[name="crfilter"], input[name="crmaxfilter"]').forEach(input => {
+      input.addEventListener('input', (event) => {
+        // Store current active input and selection state
+        this._focusedInput = {
+          name: event.target.name,
+          start: event.target.selectionStart,
+          end: event.target.selectionEnd
+        };
+
+        EncounterData.filter = html.querySelector('input[name="filter"]')?.value || "";
+        EncounterData.crFilter = html.querySelector('input[name="crfilter"]')?.value || "";
+        EncounterData.crMaxFilter = html.querySelector('input[name="crmaxfilter"]')?.value || "";
+
+        this.render(true)
+      });
+    });
+  }
+
+  static async #onSubmitForm(event, form, formData) {
+    const rawData = formData.object;
+    const encId = this.currentEncounterId;
+
+    if ("filter" in rawData) EncounterData.filter = rawData.filter;
+    if ("crfilter" in rawData) EncounterData.crFilter = rawData.crfilter;
+    if ("crmaxfilter" in rawData) EncounterData.crMaxFilter = rawData.crmaxfilter;
+
+    const encounter = EncounterData.allEncounters?.[encId];
+    if (encounter) {
+      if ("label" in rawData) encounter.label = rawData.label; // <-- ADDED: Save title changes
+      if ("environment" in rawData) encounter.environment = rawData.environment;
+      if ("tactics" in rawData) encounter.tactics = rawData.tactics;
+      if ("rewards" in rawData) encounter.rewards = rawData.rewards;
+      if ("description" in rawData) encounter.description = rawData.description;
+
+      const expanded = foundry.utils.expandObject(rawData);
+      if (expanded.enemyCount && encounter.enemies) {
+        for (const enemy of encounter.enemies) {
+          if (enemy.id in expanded.enemyCount) {
+            enemy.count = Math.max(1, Number.parseInt(expanded.enemyCount[enemy.id]) || 1);
+          }
+        }
+      }
+
+      await EncounterData.saveEncounter(encId, { [encId]: encounter });
+      EncounterBuilderForm.calculateEncounterDifficulty(encId);
+    }
+
+    this.render({force: true});
+  }
+
+  static async #onDone(event, target) {
+    this.close();
+  }
+
+  static async #onRemoveEnemy(event, target) {
+    const adversaryId = target.closest('[data-encounter-adversary-id]')?.dataset?.encounterAdversaryId;
+    const encId = this.currentEncounterId;
+    const encounter = EncounterData.allEncounters?.[encId];
+    
+    if (encounter && adversaryId) {
+      encounter.enemies = (encounter.enemies || []).filter(e => e.id !== adversaryId);
+      await EncounterData.saveEncounter(encId, { [encId]: encounter });
+      EncounterBuilderForm.calculateEncounterDifficulty(encId);
+    }
+    this.render(true);
+  }
+
+  static async #onAddEnemy(event, target) {
+    const container = target.closest('[data-encounter-adversary-id]');
+    const adversaryId = container?.dataset?.encounterAdversaryId;
+    const countInput = container?.querySelector(`input[name="addCount.${adversaryId}"]`)?.value || 1;
+    const addCount = Math.max(1, Number.parseInt(countInput) || 1);
+    const encId = this.currentEncounterId;
+
+    const encounter = EncounterData.allEncounters?.[encId];
+    const adversary = Ed4EncounterBuilder.adversaries?.find(a => a.id === adversaryId);
+
+    if (encounter && adversary) {
+      encounter.enemies = encounter.enemies || [];
+      const existing = encounter.enemies.find(e => e.id === adversaryId);
+
+      if (existing) {
+        existing.count = Number(existing.count) + addCount;
+      } else {
+        encounter.enemies.push({
+          id: adversary.id,
+          name: adversary.name,
+          img: adversary.img,
+          challenge: adversary.challenge,
+          count: addCount
+        });
+      }
+
+      await EncounterData.saveEncounter(encId, { [encId]: encounter });
+      EncounterBuilderForm.calculateEncounterDifficulty(encId);
+    }
+    this.render(true);
+  }
+
+  static async #onTogglePc(event, target) {
+    const pcId = target.closest('[data-encounter-pc-id]')?.dataset?.encounterPcId;
+    const encId = this.currentEncounterId;
+    const encounter = EncounterData.allEncounters?.[encId];
+
+    if (encounter && pcId) {
+      encounter.pcs = encounter.pcs || [];
+      const idx = encounter.pcs.findIndex(pc => pc.id === pcId);
+
+      if (idx > -1) {
+        encounter.pcs.splice(idx, 1);
+      } else {
+        encounter.pcs.push({
+          id: pcId,
+          effectiveCircle: Ed4EncounterBuilder.getPcAndCalculateEC(pcId) || 1
+        });
+      }
+
+      await EncounterData.saveEncounter(encId, { [encId]: encounter });
+      EncounterBuilderForm.calculateEncounterDifficulty(encId);
+    }
+    this.render(true);
+  }
+
+  static async #onViewAdversary(event, target) {
+    const adversaryId = target.closest('[data-encounter-adversary-id]')?.dataset?.encounterAdversaryId;
+    const found = Ed4EncounterBuilder.adversaries?.find(a => a.id === adversaryId);
+
+    if (found?.compendium) {
+      const pack = game.packs.get(found.compendium);
+      if (pack) {
+        const doc = await pack.getDocument(adversaryId);
+        doc?.sheet?.render(true);
       }
     }
   }
 
-  static calculateEncounterDifficultyRatingText(rating) {
-    if (rating > 1.5)
-      return "simple";
-    if (rating > 1.2)
-      return "easy";
-    if (rating > 0.8)
-      return "normal";
-    if (rating > 0.5)
-      return "hard";
-    return "deadly";
+  // Add static method to class:
+  static async #onGenerateReward(event, target) {
+    const encId = this.currentEncounterId;
+    const encounter = EncounterData.allEncounters?.[encId];
+    if (!encounter) return;
 
+    // 1. Calculate sum of selected PCs' ECRs
+    const pcs = encounter.pcs || [];
+    const totalEcr = pcs.reduce((sum, pc) => {
+      const ecr = Number(pc.effectiveCircle) || 0;
+      return sum + ecr;
+    }, 0);
+
+    const tavs = totalEcr * 100;
+    const awardString = `${tavs} Tavs`;
+
+    // 2. Read current DOM value to preserve any unsaved text typed by GM
+    const textarea = this.element.querySelector('textarea[name="rewards"]');
+    const existingText = textarea ? textarea.value.trim() : (encounter.rewards || "").trim();
+
+    // 3. Append generated award to current content
+    encounter.rewards = existingText ? `${existingText}\n${awardString}` : awardString;
+
+    // 4. Save and re-render
+    await EncounterData.saveEncounter(encId, { [encId]: encounter });
+    this.render(true);
   }
 
   static calculateEncounterDifficulty(encounterId) {
-    Ed4EncounterBuilder.log(false, "calculating encounter difficulty: ", encounterId || this.options.encounterId);
-    const enc = EncounterData.getEncounter(game.userId, encounterId || this.options.encounterId);
-    if (enc && enc[encounterId]) {
-      let i = 0;
-      enc[encounterId].enemies.forEach((e) => { i += this.getChallengeNumberFromString(e.challenge, e.name) * e.count})
-      let enemyStrength = i || 0.1;
+    const encounter = EncounterData.allEncounters?.[encounterId];
+    if (!encounter) return;
 
-      i = 0;
-      enc[encounterId].pcs.forEach((pc) => { i += pc.effectiveCircle; });
-      let partyStrength = i || 0.1;
-      
-      Ed4EncounterBuilder.log(false, ` party strength ${partyStrength} enemy strength ${enemyStrength}`);
-      enc[encounterId].difficulty = partyStrength / enemyStrength;
-      enc[encounterId].difficultyRating = this.calculateEncounterDifficultyRatingText(enc[encounterId].difficulty);
-      
+    let enemyStrength = 0;
+    (encounter.enemies || []).forEach(e => {
+      enemyStrength += Ed4EncounterBuilder.getChallengeNumberFromString(e.challenge, e.name) * (e.count || 1);
+    });
 
-      Ed4EncounterBuilder.log(false, "encounter difficulty: ", enc[encounterId].difficulty);
-    }
+    let partyStrength = 0;
+    (encounter.pcs || []).forEach(pc => {
+      partyStrength += (pc.effectiveCircle || 1);
+    });
+
+    enemyStrength = enemyStrength || 0.1;
+    partyStrength = partyStrength || 0.1;
+
+    const ratio = partyStrength / enemyStrength;
+    encounter.difficulty = ratio;
+
+    if (ratio > 1.5) encounter.difficultyRating = "simple";
+    else if (ratio > 1.2) encounter.difficultyRating = "easy";
+    else if (ratio > 0.8) encounter.difficultyRating = "normal";
+    else if (ratio > 0.5) encounter.difficultyRating = "hard";
+    else encounter.difficultyRating = "deadly";
+
+    EncounterData.saveEncounter(encounterId, { [encounterId]: encounter });
   }
+
 
   static getChallengeNumberFromString(challenge, name) {
     if (!challenge) {
@@ -788,16 +1117,37 @@ class EncounterBuilderForm extends FormApplication {
     return 1;
   }
   getData(options) {
-    Ed4EncounterBuilder.log(false, 'BuildEncounterForm: getData() called');
+  Ed4EncounterBuilder.log(false, 'BuildEncounterForm: getData() called');
 
-    return { 
-      encounter: EncounterData.allEncounters[this.options.encounterId],
-      adversaries: EncounterData.allAdversaries,
-      filteredAdversaries: EncounterData.filteredAdversaries,
-      allpcs: Ed4EncounterBuilder.getPcs,
-    }
+  // Fallback to whichever property your class uses to track the active encounter
+  const encounterId = this.options?.encounterId || this.encounterId || this.currentEncounterId;
+  const encounter = EncounterData.allEncounters?.[encounterId] || {};
+
+  // Safely resolve getPcs whether it's an array, a getter, or a function
+  const rawPcs = typeof Ed4EncounterBuilder.getPcs === 'function' 
+    ? Ed4EncounterBuilder.getPcs() 
+    : Ed4EncounterBuilder.getPcs;
+
+Ed4EncounterBuilder.log(false, "Sorting PCs for encounter:", encounterId, sortedPcs);
+  const sortedPcs = [...(rawPcs || [])];
+
+  sortedPcs.sort((a, b) => {
+    const aSelected = encounter?.pcs?.some(pc => pc.id === a.id) || false;
+    const bSelected = encounter?.pcs?.some(pc => pc.id === b.id) || false;
+    
+    if (aSelected && !bSelected) return -1;
+    if (!aSelected && bSelected) return 1;
+    
+    return a.name.localeCompare(b.name);
+  });
+
+  return { 
+    encounter: encounter,
+    adversaries: EncounterData.allAdversaries,
+    filteredAdversaries: EncounterData.filteredAdversaries,
+    allpcs: sortedPcs,
   }
-
+}
   async _updateObject(event, formData) {
 
     const expandedData = foundry.utils.expandObject(formData);
@@ -809,7 +1159,7 @@ class EncounterBuilderForm extends FormApplication {
     //expandedData[this.options.encounterId][this.options.encounterId].description = expandedData.encounter.description;
     await EncounterData.updateUserEncounters(this.options.userId, expandedData[this.options.encounterId]);
 
-    this.render();
+    this.render(true);
   }
 
   static _handleFilter(event) {
@@ -954,7 +1304,7 @@ class EncounterBuilderForm extends FormApplication {
       
       // case 'delete': {
       //   await EncounterData.deleteEncounter(encounterId);
-      //   this.render();
+      //   this.render(true);
       //   break;
       // }
 
@@ -965,3 +1315,5 @@ class EncounterBuilderForm extends FormApplication {
 
 } //EncounterBuilderForm
 
+// Global window binding for legacy module compatibility
+window.EncounterBuilderForm = EncounterBuilderForm;

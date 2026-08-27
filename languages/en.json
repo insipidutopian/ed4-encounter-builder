@@ -1,6 +1,7 @@
 {
   "ED4-ENCOUNTERBUILDER": {
-    "button-title": "Open Encounter Builder",
+    "button-title": "Encounter Designer",
+    "builder-title": "Encounter Designer",
 
     "list-form": {
       "mark-done-label": "Complete",
@@ -26,14 +27,15 @@
       "rewards-label": "Rewards",
       "available-label": "available",
       "enemies-label": "Enemies",
-      "add-more-label": "Add More",
+      "add-more-label": "Add Enemies",
       "search-inputhint": "search by name",
       "crfilter-inputhint": "filter by Challenge",
       "crfiltermax-inputhint": "Max Challenge",
       "environment-inputhint": "list any traps or terrain features here",
       "tactics-inputhint": "list any enemy tactics here",
       "rewards-inputhint": "list any rewards here",
-      "description-inputhint": "Encounter Description..."
+      "description-inputhint": "Encounter Description...",
+      "ecr-award-button": "ECR Appropriate Award"
     },
 
     

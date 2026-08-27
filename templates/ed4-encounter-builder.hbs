@@ -1,108 +1,128 @@
-{{log 'ed4-encounter-builder' this}}
-<form name="ed-encounter-builder-form">
-  <h1>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-name-label" }}: {{encounter.label}}</h1>
-  <section>
-    <h2>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-challenge-section" }}</h2>
-    <section class="encounter-builder-challenge-section">
-      <section class="encounter-builder-challenge-subsection" style="border: 2px solid black">
-        <h3 class="ed4-encounter-builder">{{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-difficulty" }}: {{encounter.difficultyRating}}</h3>
-        <div id="difficulty-slider">
-          <img src="modules/ed4-encounter-builder/assets/difficulty-gauge-{{encounter.difficultyRating}}.png" alt="{{encounter.difficultyRating}} difficulty indicator" class="difficulty-gauge" width="250" height="133"/>
+<div class="ed4-encounter-builder-container" style="display: flex; flex-direction: column; height: 100%; gap: 8px;">
+
+  <!-- PERSISTENT HEADER (Editable Title, Description & Gauge) -->
+  <header style="display: flex; gap: 12px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid var(--color-border-dark);">
+    <div style="flex: 2; display: flex; flex-direction: column; gap: 4px;">
+      <input type="text" name="label" value="{{encounter.label}}" placeholder="Encounter Name" style="font-size: 1.4em; font-weight: bold; border: none; background: transparent; margin: 0; padding: 2px 0; width: 100%; box-sizing: border-box;" />
+      <textarea rows="2" name="description" placeholder="{{ localize 'ED4-ENCOUNTERBUILDER.builder-form.description-inputhint' }}" style="width: 100%; box-sizing: border-box; resize: none;">{{encounter.description}}</textarea>
+    </div>
+    
+    <div style="flex: 0 0 160px; text-align: center;">
+      <h4 style="margin: 0;">{{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-difficulty" }}: {{encounter.difficultyRating}}</h4>
+      <img src="modules/ed4-encounter-builder/assets/difficulty-gauge-{{encounter.difficultyRating}}.png" alt="{{encounter.difficultyRating}} difficulty indicator" style="width: 100%; height: auto; border: none;"/>
+    </div>
+  </header>
+
+  <!-- TAB NAVIGATION -->
+  <nav class="sheet-tabs tabs" data-group="primary" style="display: flex; border-bottom: 1px solid var(--color-border-dark);">
+    <a class="item active" data-tab="roster"><i class="fas fa-users-slash"></i> {{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-challenge-section" }} & {{ localize "ED4-ENCOUNTERBUILDER.builder-form.enemies-label" }}</a>
+    <a class="item" data-tab="notes"><i class="fas fa-book-open"></i> {{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-details-section" }}</a>
+  </nav>
+
+  <!-- TAB CONTENT AREA -->
+  <section class="tab-content" style="flex: 1; overflow: hidden;">
+    
+    <!-- TAB 1: ROSTER & MONSTERS -->
+    <div class="tab active" data-tab="roster" data-group="primary" style="display: block; height: 100%;">
+      <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; height: 100%;">
+        
+        <!-- Left Column: Party & Active Enemies -->
+        <div style="display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0;">
+          <fieldset style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+            <legend>{{localize "ED4-ENCOUNTERBUILDER.builder-form.pcs-label"}} ({{allpcs.length}} {{localize "ED4-ENCOUNTERBUILDER.builder-form.available-label"}})</legend>
+            <!-- Removed max-height, added flex: 1 -->
+            <ul class="nav-ul" style="flex: 1; overflow-y: auto; margin: 0; padding: 0;">
+              {{#each allpcs}}
+              <li class="flexrow" data-encounter-pc-id="{{id}}" style="align-items: center; gap: 6px; padding: 2px 0;">
+                <input class="flex0" type="checkbox" name="pc.{{id}}" data-action="toggle-pc" title="{{localize 'ED4-ENCOUNTERBUILDER.builder-form.mark-done'}}" {{#if (pcIsInEncounter id ../encounter.id)}}checked{{/if}}/>
+                <img class="flex0" src="{{img}}" width="24" height="24" alt="{{name}}"/>
+                <span class="flex" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{name}}</span>
+                <span class="flex0" style="font-weight: bold; width: 65px; text-align: right; white-space: nowrap;">EC {{flags.ed4-encounter-builder.effectiveCircle}}</span>
+              </li>
+              {{/each}}
+            </ul>
+          </fieldset>
+
+          <fieldset style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
+            <legend>{{localize "ED4-ENCOUNTERBUILDER.builder-form.enemies-label"}}</legend>
+            <ul class="nav-ul" style="flex: 1; overflow-y: auto; margin: 0; padding: 0;">
+              {{#each encounter.enemies}}
+              <li class="flexrow" data-encounter-adversary-id="{{id}}" style="align-items: center; gap: 6px; padding: 2px 0;">
+                <input class="flex0" type="number" value="{{count}}" name="enemyCount.{{id}}" min="1" style="width: 45px;"/>
+                <img class="flex0" src="{{img}}" width="24" height="24" alt="{{name}}"/>
+                <span class="flex" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{name}}</span>
+                <button type="button" title="{{localize 'ED4-ENCOUNTERBUILDER.builder-form.view-adversary-hint'}}" data-action="view-adversary" class="flex0 icon-button">
+                  <i class="fas fa-eye"></i>
+                </button>
+                <span class="flex0" style="width: 60px; text-align: center; white-space: nowrap;">CR {{challenge}}</span>
+                <button type="button" title="{{localize 'ED4-ENCOUNTERBUILDER.builder-form.build-encounter'}}" data-action="remove" class="flex0 icon-button">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </li>
+              {{/each}}
+            </ul>
+          </fieldset>
         </div>
-      </section>
-      <section class="encounter-builder-pcs-subsection" style="border: 2px solid black">
-        <h3 class="ed4-encounter-builder">{{localize "ED4-ENCOUNTERBUILDER.builder-form.pcs-label"}}: ({{allpcs.length}} {{localize "ED4-ENCOUNTERBUILDER.builder-form.available-label"}})</h3>
-        <ul class="nav-ul">
-        {{#each allpcs}}
-          <li class="flexrow ed4-encounter-builder ed4-encounter-builder-griditem document actor directory-item" draggable="true" data-encounter-pc-id="{{id}}">
-            <input type="checkbox" name="{{id}}.isDone" title="{{localize "ED4-ENCOUNTERBUILDER.builder-form.mark-done"}}" data-action="toggle-pc" data-dtype="Boolean" 
-              {{#if (pcIsInEncounter id ../encounter.id)}}checked{{/if}}/>
-            <img class="flex0 encounter-builder-adversary-img" src="{{img}}" alt="{{name}}" />        
-            <section class="flex">{{name}}</section>
-            <section class="flex">{{flags.ed4-encounter-builder.effectiveCircle}}</section> 
-        {{/each}}
-        </ul>
-      </section>
-    </section>
-  </section>
-  <section name="adversaries">
-    <h2>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-adversaries-section" }}</h2>
-    <section class="encounter-builder-adversaries-section item-list" data-encounter-id="{{encounter.id}}">
-      <section class="encounter-builder-adversaries-subsection" style="border: 2px solid green">
-        <h3 class="ed4-encounter-builder">{{localize "ED4-ENCOUNTERBUILDER.builder-form.enemies-label"}}</h3>
-        <ul class="nav-ul">
-          {{#each encounter.enemies}}
-          <li class="flexrow ed4-encounter-builder ed4-encounter-builder-griditem" data-encounter-adversary-id="{{id}}">
-            <input class="flex0" type="text" value="{{count}}" name="{{id}}.count" data-dtype="Number" onchange="EncounterBuilderForm.updateEnemyCount()"/>
-            <img class="flex0 encounter-builder-adversary-img" src="{{img}}" alt="{{name}}" />
-            <section class="flex">{{name}}</section>
-            <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.builder-form.view-adversary-hint"}}" data-action="view-adversary" class="flex0 encounter-builder-icon-button">
-              <i class="fas fa-eye"></i>
-            </button>
-            <section class="flex">{{challenge}}</section> 
-            <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.builder-form.build-encounter"}}" data-action="remove" class="flex0 encounter-builder-icon-button">
-              <i class="fas fa-trash"></i>
-            </button>
-          </li>
-          {{/each}}
-      </section>
-      <section class="encounter-builder-adversaries-subsection item-list" style="border: 2px solid green">
-        <h3 class="ed4-encounter-builder">{{localize "ED4-ENCOUNTERBUILDER.builder-form.add-more-label"}}</h3>
-        <section class="flexrow ed4-encounter-builder ed4-encounter-builder-griditem">
-          <input type="text" value="{{filter}}" name="filter" placeholder="{{ localize "ED4-ENCOUNTERBUILDER.builder-form.search-inputhint" }}" data-dtype="String" onkeyup="EncounterBuilderForm._handleFilter(event)" class="flex"/>
-          <input type="text" value="{{crfilter}}" name="crfilter" placeholder="{{ localize "ED4-ENCOUNTERBUILDER.builder-form.crfilter-inputhint" }}" data-dtype="Number" onkeyup="EncounterBuilderForm._handleCRFilter(event)" class="flex1"/>
-          <input type="text" value="{{crmaxfilter}}" name="crmaxfilter" placeholder="{{ localize "ED4-ENCOUNTERBUILDER.builder-form.crfiltermax-inputhint" }}" data-dtype="Number" onkeyup="EncounterBuilderForm._handleCRMaxFilter(event)" class="flex1"/>
-        </section>
-        <ul class="nav-ul">
-          {{#each adversaries}}
-            <li class="flexrow ed4-encounter-builder ed4-encounter-builder-griditem directory-item actor document" draggable="true" data-encounter-adversary-id="{{id}}">
-              <input class="flex0" type="text" value="1" name="{{id}}.count" data-dtype="Number" data-action="count"/>
-              <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.builder-form.build-encounter"}}" data-action="add" class="flex0 encounter-builder-icon-button">
+
+        <!-- Right Column: Monster Search -->
+        <fieldset style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
+          <legend>{{localize "ED4-ENCOUNTERBUILDER.builder-form.add-more-label"}}</legend>
+          <div class="flexrow" style="gap: 4px; margin-bottom: 6px; flex: 0 0 auto;">
+            <input type="text" value="{{filter}}" name="filter" placeholder="{{ localize 'ED4-ENCOUNTERBUILDER.builder-form.search-inputhint' }}" class="flex2"/>
+            <input type="text" value="{{crfilter}}" name="crfilter" placeholder="{{ localize 'ED4-ENCOUNTERBUILDER.builder-form.crfilter-inputhint' }}" class="flex1"/>
+            <input type="text" value="{{crmaxfilter}}" name="crmaxfilter" placeholder="{{ localize 'ED4-ENCOUNTERBUILDER.builder-form.crfiltermax-inputhint' }}" class="flex1"/>
+          </div>
+          <ul class="nav-ul" style="flex: 1; overflow-y: auto; margin: 0; padding: 0;">
+            {{#each adversaries}}
+            <li class="flexrow" data-encounter-adversary-id="{{id}}" style="align-items: center; gap: 6px; padding: 2px 0;">
+              <input class="flex0" type="number" value="1" min="1" name="addCount.{{id}}" style="width: 40px;"/>
+              <button type="button" title="{{localize 'ED4-ENCOUNTERBUILDER.builder-form.build-encounter'}}" data-action="add" class="flex0">
                 <i class="fas fa-plus"></i>
               </button>
-              <img class="flex0 encounter-builder-adversary-img item" src="{{img}}" alt="{{name}}" />
-              <section class="flex">{{name}}</section>
-              <button type="button" title="{{localize "ED4-ENCOUNTERBUILDER.builder-form.view-adversary"}}" data-action="view-adversary" class="flex0 encounter-builder-icon-button">
+              <img class="flex0" src="{{img}}" width="24" height="24" alt="{{name}}"/>
+              <span class="flex" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{name}}</span>
+              <button type="button" title="{{localize 'ED4-ENCOUNTERBUILDER.builder-form.view-adversary'}}" data-action="view-adversary" class="flex0 icon-button">
                 <i class="fas fa-eye"></i>
               </button>
-              <section class="flex">CR {{challenge}}</section>
-              <section class="flex">{{compendium}}</section>
+              <span class="flex0" style="width: 60px; text-align: right; white-space: nowrap; font-size: 0.85em; opacity: 0.8;">CR {{challenge}}</span>
             </li>
-          {{/each}}
-        </ul>
-      </section>
-    </section>
-  </section>
+            {{/each}}
+          </ul>
+        </fieldset>
 
-  <section>
-    <h2>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-details-section" }}</h2>
-    <section class="encounter-builder-details-section flexrow">
-      <section class="encounter-builder-details-subsection" style="border: 2px solid darkred;">
-        <h3 class="ed4-encounter-builder">{{ localize "ED4-ENCOUNTERBUILDER.builder-form.environment-label" }}</h3>
-        <textarea class="flex0" rows="4" name="encounter-environment-{{encounter.id}}" placeholder="{{ localize "ED4-ENCOUNTERBUILDER.builder-form.environment-inputhint" }}" onchange="EncounterBuilderForm.updateValue()">{{encounter.environment}}</textarea>
-      </section>
-      <section class="encounter-builder-details-subsection" style="border: 2px solid darkred">
-        <h3 class="ed4-encounter-builder">{{ localize "ED4-ENCOUNTERBUILDER.builder-form.tactics-label" }}</h3>
-        <textarea class="flex0" rows="4" name="encounter-tactics-{{encounter.id}}" placeholder="{{ localize "ED4-ENCOUNTERBUILDER.builder-form.tactics-inputhint" }}" onchange="EncounterBuilderForm.updateValue()">{{encounter.tactics}}</textarea>
-      </section>
-      <section class="encounter-builder-details-subsection" style="border: 2px solid darkred">
-        <h3 class="ed4-encounter-builder">{{ localize "ED4-ENCOUNTERBUILDER.builder-form.rewards-label" }}</h3>
-        <textarea class="flex0" rows="4" name="encounter-rewards-{{encounter.id}}" placeholder="{{ localize "ED4-ENCOUNTERBUILDER.builder-form.rewards-inputhint" }}" onchange="EncounterBuilderForm.updateValue()">{{encounter.rewards}}</textarea>
-      </section>
-    </section>
-  </section>
-
-  <section class="description-editor">
-    <h2>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.encounter-description-label" }}</h2>
-    <section class="encounter-builder-description-section flexrow">
-      <div class="form-group stacked">
-          
-        <textarea class="flex0" rows="5" name="encounter-description-{{encounter.id}}" placeholder="{{ localize "ED4-ENCOUNTERBUILDER.builder-form.description-inputhint" }}" onchange="EncounterBuilderForm.updateValue()">{{encounter.description}}</textarea>
       </div>
-    </section>
+    </div>
+
+    <!-- TAB 2: GM NOTES -->
+    <div class="tab" data-tab="notes" data-group="primary" style="display: none; height: 100%;">
+      <div style="display: flex; flex-direction: column; gap: 10px; height: 100%;">
+        <fieldset style="flex: 1; display: flex; flex-direction: column;">
+          <legend>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.environment-label" }}</legend>
+          <textarea name="environment" placeholder="{{ localize 'ED4-ENCOUNTERBUILDER.builder-form.environment-inputhint' }}" style="width:100%; flex: 1; box-sizing: border-box; resize: none;">{{encounter.environment}}</textarea>
+        </fieldset>
+
+        <fieldset style="flex: 1; display: flex; flex-direction: column;">
+          <legend>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.tactics-label" }}</legend>
+          <textarea name="tactics" placeholder="{{ localize 'ED4-ENCOUNTERBUILDER.builder-form.tactics-inputhint' }}" style="width:100%; flex: 1; box-sizing: border-box; resize: none;">{{encounter.tactics}}</textarea>
+        </fieldset>
+
+        <fieldset style="flex: 1; display: flex; flex-direction: column;">
+          <legend style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <span>{{ localize "ED4-ENCOUNTERBUILDER.builder-form.rewards-label" }}</span>
+            <button type="button" data-action="generateReward" style="width: auto; padding: 2px 8px; font-size: 0.8em; margin-left: auto;">
+              <i class="fas fa-coins"></i> {{ localize "ED4-ENCOUNTERBUILDER.builder-form.ecr-award-button" }}
+            </button>
+          </legend>
+          <textarea name="rewards" placeholder="{{ localize 'ED4-ENCOUNTERBUILDER.builder-form.rewards-inputhint' }}" style="width:100%; flex: 1; box-sizing: border-box; resize: none;">{{encounter.rewards}}</textarea>
+        </fieldset>
+      </div>
+    </div>
+
   </section>
 
+  <!-- FIXED FOOTER -->
+  <footer style="flex: 0 0 auto;">
+    <button type="button" data-action="done" style="width: 100%;">{{localize "ED4-ENCOUNTERBUILDER.builder-form.done-button-text"}}</button>
+  </footer>
 
-
-  <button type="button" data-action="done">{{localize "ED4-ENCOUNTERBUILDER.builder-form.done-button-text"}}</button>
-</form> 
+</div>
