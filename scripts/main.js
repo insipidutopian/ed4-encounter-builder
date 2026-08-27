@@ -1,6 +1,5 @@
 CONFIG.debug.hooks = true;
 
-
 /**
  * A single Encounter in our list of Encounters.
  * @typedef {Object} Encounter
@@ -50,10 +49,6 @@ class Ed4EncounterBuilder {
     }
   }
 
-  static compendiums = { // Support GM's Guide                  Companion,                                 Panda Bestiary,                             ?Travar?,                     Iopos,                         and ?Vasgothia?
-    "Creatures":       [ "earthdawn-gm-compendium.creatures",  "earthdawn-companion.companion-creatures", "earthdawn-panda-bestiary.panda-bestiary",  "ed-travar.travar-creatures",                                "vasgothia.creatures-vasgothia" ],
-    "Masks":           [                                       "earthdawn-companion.masks",                                                                                         "earthdawn-iopos.masks-iopos", "vasgothia.masks-vasgothia"]
-  }
   static compendiumsNeedToBeLoaded = true;
   static compendiumsLoaded = [];
   static adversaries = [];
@@ -532,50 +527,6 @@ static async spawnEncounterTokens(encounterId) {
     Ed4EncounterBuilder.log(true, `[CR Parse] Fallback to default (1) for "${name}". Raw input was:`, originalInput);
     return 1;
   }
-  
-  static async _getCompendiumItem(compendiumName, itemName) {
-    try {
-      const pack = game.packs.get(compendiumName);
-      const itemID = pack.index.getName(itemName)._id;
-      const item = await pack.getDocument(itemID);
-      return game.items.fromCompendium(item);
-    } catch (e) {
-      Ed4EncounterBuilder.log(false, "Error fetching item {} from compendium {}", itemName, compendiumName);
-      return {};
-    }
-  }
-
-  static async _getCompendiumPack(compendiumName) {
-    try {
-      const pack = game.packs.get(compendiumName);
-      Ed4EncounterBuilder.log(false, "Pack has ", game.packs.get(compendiumName).folders.size , " folders");
-      return pack;
-    } catch (e) {
-      Ed4EncounterBuilder.log(false, "Missing Compendium: " + compendiumName)
-      return {};
-    }
-  }
-
-  
-  
-
-  static guessCreatureChallenge(creature) {
-    let guess = 1;
-    if (creature.system.challenge) {
-      guess = this.getChallengeNumberFromString(creature.system.challenge, creature.name);
-    }
-    return guess;
-  }
-  static addCompendiumItemToAdversaries(id, creature, compendium) {
-    if (creature.system.challenge === undefined || creature.system.challenge === "") {
-      creature.system.challenge = this.guessCreatureChallenge(creature);
-      Ed4EncounterBuilder.log(false, "compendium item had no challenge, setting default:");
-    }
-    creature = { name: creature.name, challenge: this.guessCreatureChallenge(creature), id: id, type: creature.type, img: creature.img, compendium: compendium};
-    this.adversaries.push(creature);
-  }
-
-
 
   static get getPcs() {
     const pcsList =  game.actors.filter(p => p.type == 'character').filter(p => canvas.tokens.placeables.find(c => c.name == p.prototypeToken.name))
@@ -590,18 +541,15 @@ static async spawnEncounterTokens(encounterId) {
     actor['flags'][Ed4EncounterBuilder.ID][flagName] = flagValue;
   }
 
-
   static getPcAndCalculateEC(pcId) {
 
     const pcs = this.getPcs;
-
 
     const pc = pcs.find((pc) => pc.id == pcId);
 
     this.calculatePcEffectiveCircle(pc);
     return pc.flags[Ed4EncounterBuilder.ID].effectiveCircle;
   } 
-
 
   static calculatePcEffectiveCircle(pc) {
     Ed4EncounterBuilder.log(false, "Calculating effective circle for " + pc.name + " with LP: " + pc.system.lp.total)
@@ -665,7 +613,7 @@ Hooks.on("renderSceneControls", (controls, b, c) => {
 });
 
 Hooks.once('init', async function() {
-	Ed4EncounterBuilder.log(false,  'ED4 Encounter Builder initializing!');
+  Ed4EncounterBuilder.log(false,  'ED4 Encounter Builder initializing!');
   Ed4EncounterBuilder.initialize();
   
 
@@ -1541,12 +1489,6 @@ Ed4EncounterBuilder.log(false, "Sorting PCs for encounter:", encounterId, sorted
           document.sheet.render(true);
         }
         break;
-      
-      // case 'delete': {
-      //   await EncounterData.deleteEncounter(encounterId);
-      //   this.render(true);
-      //   break;
-      // }
 
       default:
         Ed4EncounterBuilder.log(false, 'BuildEncounterForm: Invalid action detected', action);
