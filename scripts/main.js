@@ -934,33 +934,22 @@ class EncounterBuilderForm extends HandlebarsApplicationMixin(foundry.applicatio
     this.encounterId = options.encounterId || options.id || options.encounter?.id;
   }
 
-  static DEFAULT_OPTIONS = {
-    id: 'build-encounter-form',
-    classes: ['ed4-encounter-builder'],
-    tag: 'form',
-    window: {
-      title: 'ED4-ENCOUNTERBUILDER.builder-title',
-      resizable: true
-    },
-    position: {
-      width: 800,
-      height: 720
-    },
-    form: {
-      handler: EncounterBuilderForm.#onSubmitForm,
-      submitOnChange: true,
-      closeOnSubmit: false
-    },
-    actions: {
-      done: EncounterBuilderForm.#onDone,
-      remove: EncounterBuilderForm.#onRemoveEnemy,
-      'send-to-combat': EncounterBuilderForm.#onSendToCombat,
-      add: EncounterBuilderForm.#onAddEnemy,
-      'toggle-pc': EncounterBuilderForm.#onTogglePc,
-      'view-adversary': EncounterBuilderForm.#onViewAdversary,
-      generateReward: EncounterBuilderForm.#onGenerateReward // <-- ADD ACTION
-    }
-  };
+  static get DEFAULT_OPTIONS() {
+    return foundry.utils.mergeObject(super.DEFAULT_OPTIONS, {
+      id: "ed4-encounter-builder",
+      classes: ["earthdawn", "encounter-builder"],
+      window: {
+        title: "ED4.EncounterBuilder.Title",
+        resizable: true,
+        width: 650,
+        height: 700
+      },
+      actions: {
+        addParticipant: EncounterBuilderForm._onAddParticipant,
+        removeParticipant: EncounterBuilderForm._onRemoveParticipant
+      }
+    });
+  }
 
   static PARTS = {
     form: {
